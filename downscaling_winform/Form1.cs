@@ -27,6 +27,11 @@ namespace downscaling_winform
             }
         }
 
+        const int newWidth = 128;
+        const int newHeight = 128;
+        //const int newWidth = 256;
+        //const int newHeight = 171;
+
         unsafe Bitmap downscaling_kernel(Bitmap input, Size newSize, Kernel k)
         {
             Bitmap output = new Bitmap(newSize.Width, newSize.Height, input.PixelFormat);
@@ -55,10 +60,13 @@ namespace downscaling_winform
                                 {
                                     int px = cx - k.Width / 2 + kx;
                                     int i_idx = 4 * px + py * i_it.Stride;
-                                    double w = k.Data[kx + ky * k.Width];
-                                    b += w * i_data[i_idx + 0] / 255.0;
-                                    g += w * i_data[i_idx + 1] / 255.0;
-                                    r += w * i_data[i_idx + 2] / 255.0;
+                                    if (0 <= px && px < input.Width && 0 <= py && py < input.Height)
+                                    {
+                                        double w = k.Data[kx + ky * k.Width];
+                                        b += w * i_data[i_idx + 0] / 255.0;
+                                        g += w * i_data[i_idx + 1] / 255.0;
+                                        r += w * i_data[i_idx + 2] / 255.0;
+                                    }
                                 }
                             }
                             o_data[o_idx + 0] = (byte)(255.0 * b);
@@ -193,7 +201,7 @@ namespace downscaling_winform
                 var img = new IMG(img1.w, img1.h);
                 for (int i = 0; i < img1.w * img1.h; i++)
                 {
-                    img.data[i] = img1.data[i] + img2.data[i];
+                    img.data[i] = img1.data[i] - img2.data[i];
                 }
                 return img;
             }
@@ -211,16 +219,9 @@ namespace downscaling_winform
                 var img = new IMG(img1.w, img1.h);
                 for (int i = 0; i < img1.w * img1.h; i++)
                 {
-                    img.data[i] = img1.data[i] / img2.data[i];
+                    img.data[i] = img2.data[i] <= 1e-4 ? 0.0 : img1.data[i] / img2.data[i];
                 }
                 return img;
-            }
-            public void ZeroIfLessThan(double eps)
-            {
-                for (int i = 0; i < w * h; i++)
-                {
-                    if (data[i] < eps) data[i] = 0.0;
-                }
             }
         }
 
@@ -234,7 +235,7 @@ namespace downscaling_winform
                     // patchの真ん中をサンプリング
                     int sx = (int)((0.5 + x) * s.Width);
                     int sy = (int)((0.5 + y) * s.Height);
-                    img.data[x + img.w * y] = img1.data[sx + img1.h * sy];
+                    img.data[x + img.w * y] = img1.data[sx + img1.w * sy];
                 }
             }
             return img;
@@ -252,7 +253,7 @@ namespace downscaling_winform
                     {
                         for (int kx = 0; kx < k.Width; kx++)
                         {
-                            value = k.Data[kx + ky * k.Width] * img1.data[(x + kx) + (y + ky) * img1.w];
+                            value += k.Data[kx + ky * k.Width] * img1.data[(x + kx) + (y + ky) * img1.w];
                         }
                     }
                     img.data[x + img.w * y] = value;
@@ -277,7 +278,7 @@ namespace downscaling_winform
                             int iy = (y + ky - k.Height + 1);
                             if (0 <= ix && ix < img1.w && 0 <= iy && iy < img1.h)
                             {
-                                value = k.Data[kx + ky * k.Width] * img1.data[ix + iy * img1.w];
+                                value += k.Data[kx + ky * k.Width] * img1.data[ix + iy * img1.w];
                             }
                         }
                     }
@@ -309,7 +310,19 @@ namespace downscaling_winform
             var img = new IMG(img1.w, img1.h);
             for (int i = 0; i < img1.w * img1.h; i++)
             {
-                img.data[i] = Math.Sqrt(img1.data[i]);
+                // 誤差の関係で0以下になることがある
+                img.data[i] = img1.data[i] < 0 ? 0 : Math.Sqrt(img1.data[i]);
+            }
+            return img;
+        }
+
+        IMG Clamp01(IMG img1)
+        {
+            var img = new IMG(img1.w, img1.h);
+            for (int i = 0; i < img1.w * img1.h; i++)
+            {
+                // 誤差の関係で0以下になることがある
+                img.data[i] = img1.data[i] < 0 ? 0 : img1.data[i] > 1 ? 1 : img1.data[i];
             }
             return img;
         }
@@ -341,16 +354,18 @@ namespace downscaling_winform
             var L2 = subSample(convValid(H * H, P(s)), s);
             var M = convValid(L, P(np));
             var Sl = convValid(L * L, P(np)) - M * M;
+//            Sl.ZeroIfLessThan(1e-6);
             var Sh = convValid(L2, P(np)) - M * M;
             var R = Sqrt(Sh / Sl);
-            R.ZeroIfLessThan(1e-6);
+            R=Clamp01(R);
+//            R.ZeroIfLessThan(1e-6);
             var N = convFull(I(M), P(np));
             var T = convFull(R * M, P(np));
             M = convFull(M, P(np));
             R = convFull(R, P(np));
-            L = convFull(L, P(np)); // 論文にないけどこれなやらないと配列サイズがあわない。
+      //      L = convFull(L, P(np)); // 論文にないけどこれなやらないと配列サイズがあわない。
             var D = (M + R * L - T) / N;
-            return D;
+            return D;// L*R ;
         }
 
         unsafe Bitmap toBitmap(IMG R, IMG G, IMG B, PixelFormat pixelFormat)
@@ -384,29 +399,17 @@ namespace downscaling_winform
             var DB = perceptual(imgB, newSize);
             var DG = perceptual(imgG, newSize);
             var DR = perceptual(imgR, newSize);
-
-            //for (int y = 0; y < DR.h; y++)
-            //{
-            //    for (int x = 0; x < DR.w; x++)
-            //    {
-            //        DB.data[x + y * DR.w] = 1.0 * x / newSize.Width;
-            //        DG.data[x + y * DR.w] = (1.0 - 1.0 * x / newSize.Width);
-            //        DR.data[x + y * DR.w] = 1.0 * y / newSize.Height;
-            //    }
-            //}
-
-
             var output = toBitmap(DR, DG, DB, input.PixelFormat);
             return output;
         }
 
         void downsample(ShowImageCollection collection, Bitmap input)
         {
-            collection.Set(subsamplingRButton.Text, subsampling(input, new Size(40, 40)));
-            collection.Set(boxRButton.Text, box(input, new Size(40, 40)));
-            collection.Set(gaussianRButton.Text, gaussian5x5(input, new Size(40, 40)));
-            collection.Set(bicubicRButton.Text, bicubic(input, new Size(40, 40)));
-            collection.Set(perceptualRButton.Text, perceptual(input, new Size(40, 40)));
+            collection.Set(subsamplingRButton.Text, subsampling(input, new Size(newWidth, newHeight)));
+            collection.Set(boxRButton.Text, box(input, new Size(newWidth, newHeight)));
+            collection.Set(gaussianRButton.Text, gaussian5x5(input, new Size(newWidth, newHeight)));
+            collection.Set(bicubicRButton.Text, bicubic(input, new Size(newWidth, newHeight)));
+            collection.Set(perceptualRButton.Text, perceptual(input, new Size(newWidth, newHeight)));
         }
 
         class ShowImageCollection
@@ -461,6 +464,7 @@ namespace downscaling_winform
         private void Form1_Load(object sender, EventArgs e)
         {
             openImage(@"../../../../data/input/mario1_input.png");
+//            openImage(@"../../../../data/input/perceptual.png");
         }
 
         void openImage(string fileName)
@@ -543,7 +547,7 @@ namespace downscaling_winform
                 var input = collection.Get(inputRButton.Text);
                 if (input != null)
                 {
-                    collection.Set(bicubicRButton.Text, bicubic(input, new Size(40, 40)));
+                    collection.Set(bicubicRButton.Text, bicubic(input, new Size(newWidth, newHeight)));
                     updateShowImage();
                 }
             }
