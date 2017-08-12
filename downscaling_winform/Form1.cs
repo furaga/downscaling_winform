@@ -224,21 +224,66 @@ namespace downscaling_winform
             }
         }
 
-        unsafe IMG subSample(IMG img, Size s)
+        unsafe IMG subSample(IMG img1, Size s)
         {
-            // TODO
+            IMG img = new IMG(img1.w / s.Width, img1.h / s.Height);
+            for (int y = 0; y < img.h; y++)
+            {
+                for (int x = 0; x < img.w; x++)
+                {
+                    // patchの真ん中をサンプリング
+                    int sx = (int)((0.5 + x) * s.Width);
+                    int sy = (int)((0.5 + y) * s.Height);
+                    img.data[x + img.w * y] = img1.data[sx + img1.h * sy];
+                }
+            }
             return img;
         }
 
-        unsafe IMG convValid(IMG img, Kernel s)
+        unsafe IMG convValid(IMG img1, Kernel k)
         {
-            // TODO
+            IMG img = new IMG(img1.w - (k.Width - 1), img1.h - (k.Height - 1));
+            for (int y = 0; y < img.h; y++)
+            {
+                for (int x = 0; x < img.w; x++)
+                {
+                    double value = 0.0;
+                    for (int ky = 0; ky < k.Height; ky++)
+                    {
+                        for (int kx = 0; kx < k.Width; kx++)
+                        {
+                            value = k.Data[kx + ky * k.Width] * img1.data[(x + kx) + (y + ky) * img1.w];
+                        }
+                    }
+                    img.data[x + img.w * y] = value;
+                }
+            }
             return img;
         }
 
-        unsafe IMG convFull(IMG img, Kernel s)
+        unsafe IMG convFull(IMG img1, Kernel k)
         {
-            // TODO
+            IMG img = new IMG(img1.w + (k.Width - 1), img1.h + (k.Height - 1));
+            for (int y = 0; y < img.h; y++)
+            {
+                for (int x = 0; x < img.w; x++)
+                {
+                    double value = 0.0;
+                    for (int ky = 0; ky < k.Height; ky++)
+                    {
+                        for (int kx = 0; kx < k.Width; kx++)
+                        {
+                            int ix = (x + kx - k.Width + 1);
+                            int iy = (y + ky - k.Height + 1);
+                            if (0 <= ix && ix < img1.w && 0 <= iy && iy < img1.h)
+                            {
+                                value = k.Data[kx + ky * k.Width] * img1.data[ix + iy * img1.w];
+                            }
+                        }
+                    }
+                    img.data[x + img.w * y] = value;
+                }
+            }
             return img;
         }
 
@@ -247,6 +292,16 @@ namespace downscaling_winform
             // Average filter
             var data = Enumerable.Range(0, s.Width * s.Height).Select(_ => 1.0 / (s.Width * s.Height)).ToArray();
             return new Kernel(data, s.Width, s.Height);
+        }
+
+        IMG I(IMG img1)
+        {
+            var img = new IMG(img1.w, img1.h);
+            for (int i = 0; i < img1.w * img1.h; i++)
+            {
+                img.data[i] = 1.0;
+            }
+            return img;
         }
 
         IMG Sqrt(IMG img1)
@@ -277,24 +332,23 @@ namespace downscaling_winform
             return img;
         }
 
-        IMG perceptual(IMG input, Size newSize)
+        IMG perceptual(IMG H, Size newSize)
         {
             // Appendix B. As simple as possible.
-            Size s = new Size(input.w / newSize.Width, input.h / newSize.Height);
+            Size s = new Size(H.w / newSize.Width, H.h / newSize.Height);
             Size np = new Size(2, 2);
-            var H = new IMG(1, 1); // TODO
-            var IM = new IMG(1, 1); // TODO: what is this?
             var L = subSample(convValid(H, P(s)), s);
             var L2 = subSample(convValid(H * H, P(s)), s);
             var M = convValid(L, P(np));
             var Sl = convValid(L * L, P(np)) - M * M;
             var Sh = convValid(L2, P(np)) - M * M;
             var R = Sqrt(Sh / Sl);
-            R.ZeroIfLessThan(1e-4);
-            var N = convFull(IM, P(np));
+            R.ZeroIfLessThan(1e-6);
+            var N = convFull(I(M), P(np));
             var T = convFull(R * M, P(np));
             M = convFull(M, P(np));
             R = convFull(R, P(np));
+            L = convFull(L, P(np)); // 論文にないけどこれなやらないと配列サイズがあわない。
             var D = (M + R * L - T) / N;
             return D;
         }
@@ -330,17 +384,29 @@ namespace downscaling_winform
             var DB = perceptual(imgB, newSize);
             var DG = perceptual(imgG, newSize);
             var DR = perceptual(imgR, newSize);
-            var output= toBitmap(DR, DG, DB, input.PixelFormat);
+
+            //for (int y = 0; y < DR.h; y++)
+            //{
+            //    for (int x = 0; x < DR.w; x++)
+            //    {
+            //        DB.data[x + y * DR.w] = 1.0 * x / newSize.Width;
+            //        DG.data[x + y * DR.w] = (1.0 - 1.0 * x / newSize.Width);
+            //        DR.data[x + y * DR.w] = 1.0 * y / newSize.Height;
+            //    }
+            //}
+
+
+            var output = toBitmap(DR, DG, DB, input.PixelFormat);
             return output;
         }
 
         void downsample(ShowImageCollection collection, Bitmap input)
         {
-            collection.Set(subsamplingRButton.Text, subsampling(input, new Size(32, 32)));
-            collection.Set(boxRButton.Text, box(input, new Size(32, 32)));
-            collection.Set(gaussianRButton.Text, gaussian5x5(input, new Size(32, 32)));
-            collection.Set(bicubicRButton.Text, bicubic(input, new Size(32, 32)));
-            collection.Set(perceptualRButton.Text, perceptual(input, new Size(32, 32)));
+            collection.Set(subsamplingRButton.Text, subsampling(input, new Size(40, 40)));
+            collection.Set(boxRButton.Text, box(input, new Size(40, 40)));
+            collection.Set(gaussianRButton.Text, gaussian5x5(input, new Size(40, 40)));
+            collection.Set(bicubicRButton.Text, bicubic(input, new Size(40, 40)));
+            collection.Set(perceptualRButton.Text, perceptual(input, new Size(40, 40)));
         }
 
         class ShowImageCollection
@@ -477,7 +543,7 @@ namespace downscaling_winform
                 var input = collection.Get(inputRButton.Text);
                 if (input != null)
                 {
-                    collection.Set(bicubicRButton.Text, bicubic(input, new Size(32, 32)));
+                    collection.Set(bicubicRButton.Text, bicubic(input, new Size(40, 40)));
                     updateShowImage();
                 }
             }
