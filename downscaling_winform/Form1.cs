@@ -27,11 +27,6 @@ namespace downscaling_winform
             }
         }
 
-        const int newWidth = 128;
-        const int newHeight = 128;
-        //const int newWidth = 256;
-        //const int newHeight = 171;
-
         unsafe Bitmap downscaling_kernel(Bitmap input, Size newSize, Kernel k)
         {
             Bitmap output = new Bitmap(newSize.Width, newSize.Height, input.PixelFormat);
@@ -225,16 +220,18 @@ namespace downscaling_winform
             }
         }
 
-        unsafe IMG subSample(IMG img1, Size s)
+        unsafe IMG subSample(IMG img1, Size newSize)
         {
-            IMG img = new IMG(img1.w / s.Width, img1.h / s.Height);
+            IMG img = new IMG(newSize.Width, newSize.Height);
+            double pw = (double)img1.w / newSize.Width;
+            double ph = (double)img1.h / newSize.Height;
             for (int y = 0; y < img.h; y++)
             {
                 for (int x = 0; x < img.w; x++)
                 {
                     // patchの真ん中をサンプリング
-                    int sx = (int)((0.5 + x) * s.Width);
-                    int sy = (int)((0.5 + y) * s.Height);
+                    int sx = (int)((0.5 + x) * pw);
+                    int sy = (int)((0.5 + y) * ph);
                     img.data[x + img.w * y] = img1.data[sx + img1.w * sy];
                 }
             }
@@ -347,25 +344,26 @@ namespace downscaling_winform
 
         IMG perceptual(IMG H, Size newSize)
         {
-            // Appendix B. As simple as possible.
+            // Follow Appendix B.
             Size s = new Size(H.w / newSize.Width, H.h / newSize.Height);
             Size np = new Size(2, 2);
-            var L = subSample(convValid(H, P(s)), s);
-            var L2 = subSample(convValid(H * H, P(s)), s);
+            var L = subSample(convValid(H, P(s)), newSize);
+            var L2 = subSample(convValid(H * H, P(s)), newSize);
+            System.Diagnostics.Debug.Assert(L.w == newSize.Width);
+            System.Diagnostics.Debug.Assert(L.h == newSize.Height);
             var M = convValid(L, P(np));
             var Sl = convValid(L * L, P(np)) - M * M;
-//            Sl.ZeroIfLessThan(1e-6);
             var Sh = convValid(L2, P(np)) - M * M;
             var R = Sqrt(Sh / Sl);
-            R=Clamp01(R);
-//            R.ZeroIfLessThan(1e-6);
+            R = Clamp01(R);
             var N = convFull(I(M), P(np));
             var T = convFull(R * M, P(np));
             M = convFull(M, P(np));
             R = convFull(R, P(np));
-      //      L = convFull(L, P(np)); // 論文にないけどこれなやらないと配列サイズがあわない。
             var D = (M + R * L - T) / N;
-            return D;// L*R ;
+            System.Diagnostics.Debug.Assert(D.w == newSize.Width);
+            System.Diagnostics.Debug.Assert(D.h == newSize.Height);
+            return D;
         }
 
         unsafe Bitmap toBitmap(IMG R, IMG G, IMG B, PixelFormat pixelFormat)
@@ -402,16 +400,7 @@ namespace downscaling_winform
             var output = toBitmap(DR, DG, DB, input.PixelFormat);
             return output;
         }
-
-        void downsample(ShowImageCollection collection, Bitmap input)
-        {
-            collection.Set(subsamplingRButton.Text, subsampling(input, new Size(newWidth, newHeight)));
-            collection.Set(boxRButton.Text, box(input, new Size(newWidth, newHeight)));
-            collection.Set(gaussianRButton.Text, gaussian5x5(input, new Size(newWidth, newHeight)));
-            collection.Set(bicubicRButton.Text, bicubic(input, new Size(newWidth, newHeight)));
-            collection.Set(perceptualRButton.Text, perceptual(input, new Size(newWidth, newHeight)));
-        }
-
+        
         class ShowImageCollection
         {
             private Dictionary<string, Bitmap> outputDict_ = new Dictionary<string, Bitmap>();
@@ -475,7 +464,7 @@ namespace downscaling_winform
                 collection.Clear();
                 var input = new Bitmap(bmp);
                 collection.Set(inputRButton.Text, input);
-                downsample(collection, input);
+                donwscale(collection, input);
                 inputRButton.Checked = true;
                 radioButton_CheckedChanged(inputRButton, null);
             }
@@ -547,10 +536,115 @@ namespace downscaling_winform
                 var input = collection.Get(inputRButton.Text);
                 if (input != null)
                 {
-                    collection.Set(bicubicRButton.Text, bicubic(input, new Size(newWidth, newHeight)));
-                    updateShowImage();
+                    double scalePercentage = 10.0;
+                    if (double.TryParse(scaleTBox.Text, out scalePercentage))
+                    {
+                        int w = (int)(input.Width * scalePercentage * 0.01);
+                        int h = (int)(input.Height * scalePercentage * 0.01);
+                        var size = new Size(w, h);
+                        collection.Set(bicubicRButton.Text, bicubic(input, size));
+                        updateShowImage();
+                    }
                 }
             }
+        }
+
+        private void downscaleButton_Click(object sender, EventArgs e)
+        {
+            var input = collection.Get(inputRButton.Text);
+            donwscale(collection, input);
+            updateShowImage();
+        }
+
+        //void downsample(ShowImageCollection collection, Bitmap input)
+        //{
+        //    if (input != null && collection != null)
+        //    {
+        //        double scalePercentage = 10.0;
+        //        if (double.TryParse(scaleTBox.Text, out scalePercentage))
+        //        {
+        //            int w = (int)(input.Width * scalePercentage * 0.01);
+        //            int h = (int)(input.Height * scalePercentage * 0.01);
+        //            var size = new Size(w, h);
+        //            collection.Set(subsamplingRButton.Text, subsampling(input, size));
+        //            collection.Set(boxRButton.Text, box(input, size));
+        //            collection.Set(gaussianRButton.Text, gaussian5x5(input, size));
+        //            collection.Set(bicubicRButton.Text, bicubic(input, size));
+        //            collection.Set(perceptualRButton.Text, perceptual(input, size));
+        //        }
+        //    }
+        //}
+
+        class DonwscaleWorkArg
+        {
+            public Bitmap input;
+            public ShowImageCollection collection;
+        }
+
+        void donwscale(ShowImageCollection collecton, Bitmap input)
+        {
+            //処理が行われているときは、何もしない
+            if (backgroundWorker1.IsBusy)
+            {
+                return;
+            }
+            downscaleButton.Enabled = false;
+            richTextBox1.Text = "";
+            progressBar.Minimum = 0;
+            progressBar.Maximum = 100;
+            progressBar.Value = 0;
+            backgroundWorker1.WorkerReportsProgress = true;
+            backgroundWorker1.WorkerSupportsCancellation = true;
+            backgroundWorker1.RunWorkerAsync(new DonwscaleWorkArg()
+            {
+                collection = collection,
+                input = input,
+            });
+        }
+
+        private void downscale_BGWork(object sender, DoWorkEventArgs e)
+        {
+            var bgWorker = sender as BackgroundWorker;
+            var args = e.Argument as DonwscaleWorkArg;
+            if (args != null)
+            {
+                var input = args.input;
+                var collection = args.collection;
+                if (input != null && collection != null)
+                {
+                    double scalePercentage = 10.0;
+                    if (double.TryParse(scaleTBox.Text, out scalePercentage))
+                    {
+                        int w = (int)(input.Width * scalePercentage * 0.01);
+                        int h = (int)(input.Height * scalePercentage * 0.01);
+                        var size = new Size(w, h);
+
+                        var sw = System.Diagnostics.Stopwatch.StartNew();
+                        collection.Set(subsamplingRButton.Text, subsampling(input, size));
+                        bgWorker.ReportProgress(0, "Subsampling: " + sw.Elapsed.TotalSeconds + " s");
+                        collection.Set(boxRButton.Text, box(input, size));
+                        bgWorker.ReportProgress(25, "Box: " + sw.Elapsed.TotalSeconds + " s");
+                        collection.Set(gaussianRButton.Text, gaussian5x5(input, size));
+                        bgWorker.ReportProgress(50, "Gaussian: " + sw.Elapsed.TotalSeconds + " s");
+                        collection.Set(bicubicRButton.Text, bicubic(input, size));
+                        bgWorker.ReportProgress(75, "Bicubic: " + sw.Elapsed.TotalSeconds + " s");
+                        collection.Set(perceptualRButton.Text, perceptual(input, size));
+                        bgWorker.ReportProgress(100, "Perceptual: " + sw.Elapsed.TotalSeconds + " s");
+                    }
+                }
+            }
+        }
+
+        private void backgroundWorker1_ProgressChanged(object sender, ProgressChangedEventArgs e)
+        {
+            progressBar.Value = e.ProgressPercentage;
+            richTextBox1.Text += e.UserState as string + "\n";
+        }
+
+        private void backgroundWorker1_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
+        {
+            downscaleButton.Enabled = true;
+            richTextBox1.Text += "All downscaling methods successfully finished!";
         }
     }
 }

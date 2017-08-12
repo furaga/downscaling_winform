@@ -32,18 +32,23 @@
             this.fileFToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.openImageOToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.splitContainer1 = new System.Windows.Forms.SplitContainer();
+            this.progressBar = new System.Windows.Forms.ProgressBar();
+            this.label2 = new System.Windows.Forms.Label();
+            this.downscaleButton = new System.Windows.Forms.Button();
+            this.scaleTBox = new System.Windows.Forms.TextBox();
+            this.label1 = new System.Windows.Forms.Label();
             this.bicubic_a_TBox = new System.Windows.Forms.TextBox();
-            this.boxRButton = new System.Windows.Forms.RadioButton();
             this.perceptualRButton = new System.Windows.Forms.RadioButton();
             this.bicubicRButton = new System.Windows.Forms.RadioButton();
+            this.gaussianRButton = new System.Windows.Forms.RadioButton();
+            this.boxRButton = new System.Windows.Forms.RadioButton();
             this.subsamplingRButton = new System.Windows.Forms.RadioButton();
             this.inputRButton = new System.Windows.Forms.RadioButton();
             this.splitContainer2 = new System.Windows.Forms.SplitContainer();
             this.canvas = new System.Windows.Forms.PictureBox();
             this.richTextBox1 = new System.Windows.Forms.RichTextBox();
             this.openFileDialog = new System.Windows.Forms.OpenFileDialog();
-            this.label1 = new System.Windows.Forms.Label();
-            this.gaussianRButton = new System.Windows.Forms.RadioButton();
+            this.backgroundWorker1 = new System.ComponentModel.BackgroundWorker();
             this.menuStrip1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.splitContainer1)).BeginInit();
             this.splitContainer1.Panel1.SuspendLayout();
@@ -94,12 +99,16 @@
             // 
             // splitContainer1.Panel1
             // 
-            this.splitContainer1.Panel1.Controls.Add(this.gaussianRButton);
+            this.splitContainer1.Panel1.Controls.Add(this.progressBar);
+            this.splitContainer1.Panel1.Controls.Add(this.label2);
+            this.splitContainer1.Panel1.Controls.Add(this.downscaleButton);
+            this.splitContainer1.Panel1.Controls.Add(this.scaleTBox);
             this.splitContainer1.Panel1.Controls.Add(this.label1);
             this.splitContainer1.Panel1.Controls.Add(this.bicubic_a_TBox);
-            this.splitContainer1.Panel1.Controls.Add(this.boxRButton);
             this.splitContainer1.Panel1.Controls.Add(this.perceptualRButton);
             this.splitContainer1.Panel1.Controls.Add(this.bicubicRButton);
+            this.splitContainer1.Panel1.Controls.Add(this.gaussianRButton);
+            this.splitContainer1.Panel1.Controls.Add(this.boxRButton);
             this.splitContainer1.Panel1.Controls.Add(this.subsamplingRButton);
             this.splitContainer1.Panel1.Controls.Add(this.inputRButton);
             // 
@@ -107,43 +116,76 @@
             // 
             this.splitContainer1.Panel2.Controls.Add(this.splitContainer2);
             this.splitContainer1.Size = new System.Drawing.Size(940, 541);
-            this.splitContainer1.SplitterDistance = 167;
+            this.splitContainer1.SplitterDistance = 177;
             this.splitContainer1.SplitterWidth = 8;
             this.splitContainer1.TabIndex = 1;
+            // 
+            // progressBar
+            // 
+            this.progressBar.Location = new System.Drawing.Point(8, 510);
+            this.progressBar.Name = "progressBar";
+            this.progressBar.Size = new System.Drawing.Size(156, 19);
+            this.progressBar.TabIndex = 1;
+            // 
+            // label2
+            // 
+            this.label2.AutoSize = true;
+            this.label2.Font = new System.Drawing.Font("メイリオ", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.label2.Location = new System.Drawing.Point(16, 17);
+            this.label2.Name = "label2";
+            this.label2.Size = new System.Drawing.Size(72, 20);
+            this.label2.TabIndex = 10;
+            this.label2.Text = "Scale (%)";
+            // 
+            // downscaleButton
+            // 
+            this.downscaleButton.Font = new System.Drawing.Font("メイリオ", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.downscaleButton.Location = new System.Drawing.Point(119, 37);
+            this.downscaleButton.Name = "downscaleButton";
+            this.downscaleButton.Size = new System.Drawing.Size(45, 24);
+            this.downscaleButton.TabIndex = 9;
+            this.downscaleButton.Text = "更新";
+            this.downscaleButton.UseVisualStyleBackColor = true;
+            this.downscaleButton.Click += new System.EventHandler(this.downscaleButton_Click);
+            // 
+            // scaleTBox
+            // 
+            this.scaleTBox.Font = new System.Drawing.Font("メイリオ", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.scaleTBox.Location = new System.Drawing.Point(16, 37);
+            this.scaleTBox.Name = "scaleTBox";
+            this.scaleTBox.Size = new System.Drawing.Size(97, 24);
+            this.scaleTBox.TabIndex = 8;
+            this.scaleTBox.Text = "10";
+            // 
+            // label1
+            // 
+            this.label1.AutoSize = true;
+            this.label1.Font = new System.Drawing.Font("メイリオ", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.label1.Location = new System.Drawing.Point(12, 232);
+            this.label1.Name = "label1";
+            this.label1.Size = new System.Drawing.Size(31, 20);
+            this.label1.TabIndex = 7;
+            this.label1.Text = "a =";
             // 
             // bicubic_a_TBox
             // 
             this.bicubic_a_TBox.Font = new System.Drawing.Font("メイリオ", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
-            this.bicubic_a_TBox.Location = new System.Drawing.Point(72, 122);
+            this.bicubic_a_TBox.Location = new System.Drawing.Point(44, 231);
             this.bicubic_a_TBox.Name = "bicubic_a_TBox";
             this.bicubic_a_TBox.Size = new System.Drawing.Size(76, 24);
-            this.bicubic_a_TBox.TabIndex = 5;
+            this.bicubic_a_TBox.TabIndex = 6;
             this.bicubic_a_TBox.Text = "-1.0";
             this.bicubic_a_TBox.TextChanged += new System.EventHandler(this.bicubic_a_TBox_TextChanged);
-            // 
-            // boxRButton
-            // 
-            this.boxRButton.AutoSize = true;
-            this.boxRButton.Font = new System.Drawing.Font("メイリオ", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
-            this.boxRButton.Location = new System.Drawing.Point(15, 58);
-            this.boxRButton.Margin = new System.Windows.Forms.Padding(6, 7, 6, 7);
-            this.boxRButton.Name = "boxRButton";
-            this.boxRButton.Size = new System.Drawing.Size(50, 24);
-            this.boxRButton.TabIndex = 4;
-            this.boxRButton.TabStop = true;
-            this.boxRButton.Text = "box";
-            this.boxRButton.UseVisualStyleBackColor = true;
-            this.boxRButton.CheckedChanged += new System.EventHandler(this.radioButton_CheckedChanged);
             // 
             // perceptualRButton
             // 
             this.perceptualRButton.AutoSize = true;
             this.perceptualRButton.Font = new System.Drawing.Font("メイリオ", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
-            this.perceptualRButton.Location = new System.Drawing.Point(15, 156);
+            this.perceptualRButton.Location = new System.Drawing.Point(15, 177);
             this.perceptualRButton.Margin = new System.Windows.Forms.Padding(6, 7, 6, 7);
             this.perceptualRButton.Name = "perceptualRButton";
             this.perceptualRButton.Size = new System.Drawing.Size(95, 24);
-            this.perceptualRButton.TabIndex = 3;
+            this.perceptualRButton.TabIndex = 5;
             this.perceptualRButton.TabStop = true;
             this.perceptualRButton.Text = "perceptual";
             this.perceptualRButton.UseVisualStyleBackColor = true;
@@ -153,21 +195,49 @@
             // 
             this.bicubicRButton.AutoSize = true;
             this.bicubicRButton.Font = new System.Drawing.Font("メイリオ", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
-            this.bicubicRButton.Location = new System.Drawing.Point(15, 99);
+            this.bicubicRButton.Location = new System.Drawing.Point(15, 158);
             this.bicubicRButton.Margin = new System.Windows.Forms.Padding(6, 7, 6, 7);
             this.bicubicRButton.Name = "bicubicRButton";
             this.bicubicRButton.Size = new System.Drawing.Size(71, 24);
-            this.bicubicRButton.TabIndex = 2;
+            this.bicubicRButton.TabIndex = 4;
             this.bicubicRButton.TabStop = true;
             this.bicubicRButton.Text = "bicubic";
             this.bicubicRButton.UseVisualStyleBackColor = true;
             this.bicubicRButton.CheckedChanged += new System.EventHandler(this.radioButton_CheckedChanged);
             // 
+            // gaussianRButton
+            // 
+            this.gaussianRButton.AutoSize = true;
+            this.gaussianRButton.Font = new System.Drawing.Font("メイリオ", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.gaussianRButton.Location = new System.Drawing.Point(15, 137);
+            this.gaussianRButton.Margin = new System.Windows.Forms.Padding(6, 7, 6, 7);
+            this.gaussianRButton.Name = "gaussianRButton";
+            this.gaussianRButton.Size = new System.Drawing.Size(82, 24);
+            this.gaussianRButton.TabIndex = 3;
+            this.gaussianRButton.TabStop = true;
+            this.gaussianRButton.Text = "gaussian";
+            this.gaussianRButton.UseVisualStyleBackColor = true;
+            this.gaussianRButton.CheckedChanged += new System.EventHandler(this.radioButton_CheckedChanged);
+            // 
+            // boxRButton
+            // 
+            this.boxRButton.AutoSize = true;
+            this.boxRButton.Font = new System.Drawing.Font("メイリオ", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.boxRButton.Location = new System.Drawing.Point(15, 117);
+            this.boxRButton.Margin = new System.Windows.Forms.Padding(6, 7, 6, 7);
+            this.boxRButton.Name = "boxRButton";
+            this.boxRButton.Size = new System.Drawing.Size(50, 24);
+            this.boxRButton.TabIndex = 2;
+            this.boxRButton.TabStop = true;
+            this.boxRButton.Text = "box";
+            this.boxRButton.UseVisualStyleBackColor = true;
+            this.boxRButton.CheckedChanged += new System.EventHandler(this.radioButton_CheckedChanged);
+            // 
             // subsamplingRButton
             // 
             this.subsamplingRButton.AutoSize = true;
             this.subsamplingRButton.Font = new System.Drawing.Font("メイリオ", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
-            this.subsamplingRButton.Location = new System.Drawing.Point(15, 40);
+            this.subsamplingRButton.Location = new System.Drawing.Point(15, 99);
             this.subsamplingRButton.Margin = new System.Windows.Forms.Padding(6, 7, 6, 7);
             this.subsamplingRButton.Name = "subsamplingRButton";
             this.subsamplingRButton.Size = new System.Drawing.Size(105, 24);
@@ -181,7 +251,7 @@
             // 
             this.inputRButton.AutoSize = true;
             this.inputRButton.Font = new System.Drawing.Font("メイリオ", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
-            this.inputRButton.Location = new System.Drawing.Point(15, 20);
+            this.inputRButton.Location = new System.Drawing.Point(15, 79);
             this.inputRButton.Margin = new System.Windows.Forms.Padding(6, 7, 6, 7);
             this.inputRButton.Name = "inputRButton";
             this.inputRButton.Size = new System.Drawing.Size(59, 24);
@@ -207,8 +277,8 @@
             // splitContainer2.Panel2
             // 
             this.splitContainer2.Panel2.Controls.Add(this.richTextBox1);
-            this.splitContainer2.Size = new System.Drawing.Size(765, 541);
-            this.splitContainer2.SplitterDistance = 391;
+            this.splitContainer2.Size = new System.Drawing.Size(755, 541);
+            this.splitContainer2.SplitterDistance = 376;
             this.splitContainer2.SplitterWidth = 9;
             this.splitContainer2.TabIndex = 0;
             // 
@@ -219,7 +289,7 @@
             this.canvas.Location = new System.Drawing.Point(0, 0);
             this.canvas.Margin = new System.Windows.Forms.Padding(6, 7, 6, 7);
             this.canvas.Name = "canvas";
-            this.canvas.Size = new System.Drawing.Size(765, 391);
+            this.canvas.Size = new System.Drawing.Size(755, 376);
             this.canvas.TabIndex = 0;
             this.canvas.TabStop = false;
             this.canvas.Paint += new System.Windows.Forms.PaintEventHandler(this.canvas_Paint);
@@ -227,10 +297,11 @@
             // richTextBox1
             // 
             this.richTextBox1.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.richTextBox1.Font = new System.Drawing.Font("メイリオ", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.richTextBox1.Location = new System.Drawing.Point(0, 0);
             this.richTextBox1.Margin = new System.Windows.Forms.Padding(6, 7, 6, 7);
             this.richTextBox1.Name = "richTextBox1";
-            this.richTextBox1.Size = new System.Drawing.Size(765, 141);
+            this.richTextBox1.Size = new System.Drawing.Size(755, 156);
             this.richTextBox1.TabIndex = 0;
             this.richTextBox1.Text = "";
             // 
@@ -238,29 +309,11 @@
             // 
             this.openFileDialog.FileName = "openFileDialog";
             // 
-            // label1
+            // backgroundWorker1
             // 
-            this.label1.AutoSize = true;
-            this.label1.Font = new System.Drawing.Font("メイリオ", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
-            this.label1.Location = new System.Drawing.Point(40, 123);
-            this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(31, 20);
-            this.label1.TabIndex = 6;
-            this.label1.Text = "a =";
-            // 
-            // gaussianRButton
-            // 
-            this.gaussianRButton.AutoSize = true;
-            this.gaussianRButton.Font = new System.Drawing.Font("メイリオ", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
-            this.gaussianRButton.Location = new System.Drawing.Point(15, 78);
-            this.gaussianRButton.Margin = new System.Windows.Forms.Padding(6, 7, 6, 7);
-            this.gaussianRButton.Name = "gaussianRButton";
-            this.gaussianRButton.Size = new System.Drawing.Size(82, 24);
-            this.gaussianRButton.TabIndex = 7;
-            this.gaussianRButton.TabStop = true;
-            this.gaussianRButton.Text = "gaussian";
-            this.gaussianRButton.UseVisualStyleBackColor = true;
-            this.gaussianRButton.CheckedChanged += new System.EventHandler(this.radioButton_CheckedChanged);
+            this.backgroundWorker1.DoWork += new System.ComponentModel.DoWorkEventHandler(this.downscale_BGWork);
+            this.backgroundWorker1.ProgressChanged += new System.ComponentModel.ProgressChangedEventHandler(this.backgroundWorker1_ProgressChanged);
+            this.backgroundWorker1.RunWorkerCompleted += new System.ComponentModel.RunWorkerCompletedEventHandler(this.backgroundWorker1_RunWorkerCompleted);
             // 
             // Form1
             // 
@@ -310,6 +363,11 @@
         private System.Windows.Forms.TextBox bicubic_a_TBox;
         private System.Windows.Forms.Label label1;
         private System.Windows.Forms.RadioButton gaussianRButton;
+        private System.Windows.Forms.Label label2;
+        private System.Windows.Forms.Button downscaleButton;
+        private System.Windows.Forms.TextBox scaleTBox;
+        private System.ComponentModel.BackgroundWorker backgroundWorker1;
+        private System.Windows.Forms.ProgressBar progressBar;
     }
 }
 
