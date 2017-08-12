@@ -48,6 +48,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="BitmapIterator.cs" />
+    <Compile Include="Downscaler.cs" />
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>
     </Compile>

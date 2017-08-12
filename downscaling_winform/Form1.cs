@@ -159,9 +159,179 @@ namespace downscaling_winform
             return bicubic(input, newSize, a);
         }
 
+
+
+        /**
+         *
+         * Perceptual
+         * 
+         **/
+
+        unsafe public class IMG
+        {
+            public int w;
+            public int h;
+            public double[] data;
+            public IMG(int w, int h)
+            {
+                this.w = w;
+                this.h = h;
+                this.data = new double[w * h];
+            }
+
+            public static IMG operator +(IMG img1, IMG img2)
+            {
+                var img = new IMG(img1.w, img1.h);
+                for (int i = 0; i < img1.w * img1.h; i++)
+                {
+                    img.data[i] = img1.data[i] + img2.data[i];
+                }
+                return img;
+            }
+            public static IMG operator -(IMG img1, IMG img2)
+            {
+                var img = new IMG(img1.w, img1.h);
+                for (int i = 0; i < img1.w * img1.h; i++)
+                {
+                    img.data[i] = img1.data[i] + img2.data[i];
+                }
+                return img;
+            }
+            public static IMG operator *(IMG img1, IMG img2)
+            {
+                var img = new IMG(img1.w, img1.h);
+                for (int i = 0; i < img1.w * img1.h; i++)
+                {
+                    img.data[i] = img1.data[i] * img2.data[i];
+                }
+                return img;
+            }
+            public static IMG operator /(IMG img1, IMG img2)
+            {
+                var img = new IMG(img1.w, img1.h);
+                for (int i = 0; i < img1.w * img1.h; i++)
+                {
+                    img.data[i] = img1.data[i] / img2.data[i];
+                }
+                return img;
+            }
+            public void ZeroIfLessThan(double eps)
+            {
+                for (int i = 0; i < w * h; i++)
+                {
+                    if (data[i] < eps) data[i] = 0.0;
+                }
+            }
+        }
+
+        unsafe IMG subSample(IMG img, Size s)
+        {
+            // TODO
+            return img;
+        }
+
+        unsafe IMG convValid(IMG img, Kernel s)
+        {
+            // TODO
+            return img;
+        }
+
+        unsafe IMG convFull(IMG img, Kernel s)
+        {
+            // TODO
+            return img;
+        }
+
+        Kernel P(Size s)
+        {
+            // Average filter
+            var data = Enumerable.Range(0, s.Width * s.Height).Select(_ => 1.0 / (s.Width * s.Height)).ToArray();
+            return new Kernel(data, s.Width, s.Height);
+        }
+
+        IMG Sqrt(IMG img1)
+        {
+            var img = new IMG(img1.w, img1.h);
+            for (int i = 0; i < img1.w * img1.h; i++)
+            {
+                img.data[i] = Math.Sqrt(img1.data[i]);
+            }
+            return img;
+        }
+
+        unsafe IMG extractChannel(Bitmap input, int channel)
+        {
+            IMG img = new IMG(input.Width, input.Height);
+            using (var i_it = new FLib.BitmapIterator(input, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb))
+            {
+                byte* i_data = (byte*)i_it.PixelData;
+                for (int iy = 0; iy < input.Height; iy++)
+                {
+                    for (int ix = 0; ix < input.Width; ix++)
+                    {
+                        int i_idx = 4 * ix + iy * i_it.Stride;
+                        img.data[ix + iy * input.Width] = i_data[i_idx + channel] / 255.0;
+                    }
+                }
+            }
+            return img;
+        }
+
+        IMG perceptual(IMG input, Size newSize)
+        {
+            // Appendix B. As simple as possible.
+            Size s = new Size(input.w / newSize.Width, input.h / newSize.Height);
+            Size np = new Size(2, 2);
+            var H = new IMG(1, 1); // TODO
+            var IM = new IMG(1, 1); // TODO: what is this?
+            var L = subSample(convValid(H, P(s)), s);
+            var L2 = subSample(convValid(H * H, P(s)), s);
+            var M = convValid(L, P(np));
+            var Sl = convValid(L * L, P(np)) - M * M;
+            var Sh = convValid(L2, P(np)) - M * M;
+            var R = Sqrt(Sh / Sl);
+            R.ZeroIfLessThan(1e-4);
+            var N = convFull(IM, P(np));
+            var T = convFull(R * M, P(np));
+            M = convFull(M, P(np));
+            R = convFull(R, P(np));
+            var D = (M + R * L - T) / N;
+            return D;
+        }
+
+        unsafe Bitmap toBitmap(IMG R, IMG G, IMG B, PixelFormat pixelFormat)
+        {
+            int w = R.w;
+            int h = R.h;
+            Bitmap output = new Bitmap(w, h, pixelFormat);
+            using (var o_it = new FLib.BitmapIterator(output, ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb))
+            {
+                byte* o_data = (byte*)o_it.PixelData;
+                for (int iy = 0; iy < h; iy++)
+                {
+                    for (int ix = 0; ix < w; ix++)
+                    {
+                        int o_idx = 4 * ix + iy * o_it.Stride;
+                        o_data[o_idx + 0] = (byte)(255.0 * B.data[ix + iy * w]);
+                        o_data[o_idx + 1] = (byte)(255.0 * G.data[ix + iy * w]);
+                        o_data[o_idx + 2] = (byte)(255.0 * R.data[ix + iy * w]);
+                        o_data[o_idx + 3] = 255;
+                    }
+                }
+            }
+            return output;
+        }
+
         unsafe Bitmap perceptual(Bitmap input, Size newSize)
         {
-            return input;
+            var imgB = extractChannel(input, 0);
+            var imgG = extractChannel(input, 1);
+            var imgR = extractChannel(input, 2);
+            var DB = perceptual(imgB, newSize);
+            var DG = perceptual(imgG, newSize);
+            var DR = perceptual(imgR, newSize);
+            var output= toBitmap(DR, DG, DB, input.PixelFormat);
+            return output;
         }
 
         void downsample(ShowImageCollection collection, Bitmap input)
