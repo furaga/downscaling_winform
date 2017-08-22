@@ -238,25 +238,38 @@ namespace downscaling_winform
             return img;
         }
 
-        unsafe IMG convValid(IMG img1, Kernel k)
+        unsafe IMG convValid(IMG input, Kernel k)
         {
-            IMG img = new IMG(img1.w - (k.Width - 1), img1.h - (k.Height - 1));
-            for (int y = 0; y < img.h; y++)
+            int iw = input.w;
+            int ih = input.h;
+            int kw = k.Width;
+            int kh = k.Height;
+            var kdata = k.Data;
+            var img1data = input.data;
+
+            IMG output = new IMG(iw - (kw - 1), iw - (kw - 1));
+            int ow = output.w;
+            int oh = output.h;
+            var imgdata = output.data;
+            for (int y = 0; y < oh; y++)
             {
-                for (int x = 0; x < img.w; x++)
+                int ooffset = ow * y;
+                for (int x = 0; x < ow; x++)
                 {
                     double value = 0.0;
-                    for (int ky = 0; ky < k.Height; ky++)
+                    for (int ky = 0; ky < kh; ky++)
                     {
-                        for (int kx = 0; kx < k.Width; kx++)
+                        int koffset = ky * kw;
+                        int offset = (y + ky) * iw + x;
+                        for (int kx = 0; kx < kw; kx++)
                         {
-                            value += k.Data[kx + ky * k.Width] * img1.data[(x + kx) + (y + ky) * img1.w];
+                            value += kdata[kx + koffset] * img1data[kx + offset];
                         }
                     }
-                    img.data[x + img.w * y] = value;
+                    imgdata[x + ooffset] = value;
                 }
             }
-            return img;
+            return output;
         }
 
         unsafe IMG convFull(IMG img1, Kernel k)
@@ -344,25 +357,54 @@ namespace downscaling_winform
 
         IMG perceptual(IMG H, Size newSize)
         {
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
             // Follow Appendix B.
             Size s = new Size(H.w / newSize.Width, H.h / newSize.Height);
             Size np = new Size(2, 2);
-            var L = subSample(convValid(H, P(s)), newSize);
+            var hps = convValid(H, P(s));
+            Console.WriteLine(string.Format("phase0.5: {0} ms", stopwatch.ElapsedMilliseconds));
+            var L = subSample(hps, newSize);
+            Console.WriteLine(string.Format("phase1: {0} ms", stopwatch.ElapsedMilliseconds));
             var L2 = subSample(convValid(H * H, P(s)), newSize);
+            Console.WriteLine(string.Format("phase2: {0} ms", stopwatch.ElapsedMilliseconds));
+
             System.Diagnostics.Debug.Assert(L.w == newSize.Width);
             System.Diagnostics.Debug.Assert(L.h == newSize.Height);
             var M = convValid(L, P(np));
+            Console.WriteLine(string.Format("phase3: {0} ms", stopwatch.ElapsedMilliseconds));
+
             var Sl = convValid(L * L, P(np)) - M * M;
+            Console.WriteLine(string.Format("phase4: {0} ms", stopwatch.ElapsedMilliseconds));
+
             var Sh = convValid(L2, P(np)) - M * M;
+            Console.WriteLine(string.Format("phase5: {0} ms", stopwatch.ElapsedMilliseconds));
+
             var R = Sqrt(Sh / Sl);
+            Console.WriteLine(string.Format("phase6: {0} ms", stopwatch.ElapsedMilliseconds));
+
             R = Clamp01(R);
+            Console.WriteLine(string.Format("phase7: {0} ms", stopwatch.ElapsedMilliseconds));
+
             var N = convFull(I(M), P(np));
+            Console.WriteLine(string.Format("phase8: {0} ms", stopwatch.ElapsedMilliseconds));
+
             var T = convFull(R * M, P(np));
+            Console.WriteLine(string.Format("phase9: {0} ms", stopwatch.ElapsedMilliseconds));
+
             M = convFull(M, P(np));
+            Console.WriteLine(string.Format("phase10: {0} ms", stopwatch.ElapsedMilliseconds));
+
             R = convFull(R, P(np));
+            Console.WriteLine(string.Format("phase11: {0} ms", stopwatch.ElapsedMilliseconds));
+
             var D = (M + R * L - T) / N;
+            Console.WriteLine(string.Format("phase12: {0} ms", stopwatch.ElapsedMilliseconds));
+
             System.Diagnostics.Debug.Assert(D.w == newSize.Width);
             System.Diagnostics.Debug.Assert(D.h == newSize.Height);
+            Console.WriteLine(string.Format("phase13: {0} ms", stopwatch.ElapsedMilliseconds));
+
             return D;
         }
 
