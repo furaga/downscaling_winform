@@ -13,6 +13,21 @@ namespace downscaling_winform
 {
     public partial class Form1 : Form
     {
+        // Content-Adaptive Downscaling [Koph, et al., SIGGRAPH Asia 2013]
+        unsafe Bitmap contentAdaptive(Bitmap input, Size newSize)
+        {
+            var output = input;
+            return output;
+        }
+
+
+
+
+
+
+
+
+        #region DownscaleMethods
         class Kernel
         {
             public double[] Data { get; private set; } = null;
@@ -247,7 +262,7 @@ namespace downscaling_winform
             var kdata = k.Data;
             var img1data = input.data;
 
-            IMG output = new IMG(iw - (kw - 1), iw - (kw - 1));
+            IMG output = new IMG(iw - (kw - 1), ih - (kh - 1));
             int ow = output.w;
             int oh = output.h;
             var imgdata = output.data;
@@ -442,7 +457,8 @@ namespace downscaling_winform
             var output = toBitmap(DR, DG, DB, input.PixelFormat);
             return output;
         }
-        
+        #endregion
+
         class ShowImageCollection
         {
             private Dictionary<string, Bitmap> outputDict_ = new Dictionary<string, Bitmap>();
@@ -495,7 +511,6 @@ namespace downscaling_winform
         private void Form1_Load(object sender, EventArgs e)
         {
             openImage(@"../../../../data/input/mario1_input.png");
-//            openImage(@"../../../../data/input/perceptual.png");
         }
 
         void openImage(string fileName)
@@ -598,25 +613,6 @@ namespace downscaling_winform
             updateShowImage();
         }
 
-        //void downsample(ShowImageCollection collection, Bitmap input)
-        //{
-        //    if (input != null && collection != null)
-        //    {
-        //        double scalePercentage = 10.0;
-        //        if (double.TryParse(scaleTBox.Text, out scalePercentage))
-        //        {
-        //            int w = (int)(input.Width * scalePercentage * 0.01);
-        //            int h = (int)(input.Height * scalePercentage * 0.01);
-        //            var size = new Size(w, h);
-        //            collection.Set(subsamplingRButton.Text, subsampling(input, size));
-        //            collection.Set(boxRButton.Text, box(input, size));
-        //            collection.Set(gaussianRButton.Text, gaussian5x5(input, size));
-        //            collection.Set(bicubicRButton.Text, bicubic(input, size));
-        //            collection.Set(perceptualRButton.Text, perceptual(input, size));
-        //        }
-        //    }
-        //}
-
         class DonwscaleWorkArg
         {
             public Bitmap input;
@@ -670,8 +666,10 @@ namespace downscaling_winform
                         bgWorker.ReportProgress(50, "Gaussian: " + sw.Elapsed.TotalSeconds + " s");
                         collection.Set(bicubicRButton.Text, bicubic(input, size));
                         bgWorker.ReportProgress(75, "Bicubic: " + sw.Elapsed.TotalSeconds + " s");
-                        collection.Set(perceptualRButton.Text, perceptual(input, size));
-                        bgWorker.ReportProgress(100, "Perceptual: " + sw.Elapsed.TotalSeconds + " s");
+                        //collection.Set(perceptualRButton.Text, perceptual(input, size));
+                        //bgWorker.ReportProgress(100, "Perceptual: " + sw.Elapsed.TotalSeconds + " s");
+                        collection.Set(contentAdaptiveRButton.Text, contentAdaptive(input, size));
+                        bgWorker.ReportProgress(100, "ContentAdaptive: " + sw.Elapsed.TotalSeconds + " s");
                     }
                 }
             }

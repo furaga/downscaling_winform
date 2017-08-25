@@ -49,6 +49,7 @@
             this.richTextBox1 = new System.Windows.Forms.RichTextBox();
             this.openFileDialog = new System.Windows.Forms.OpenFileDialog();
             this.backgroundWorker1 = new System.ComponentModel.BackgroundWorker();
+            this.contentAdaptiveRButton = new System.Windows.Forms.RadioButton();
             this.menuStrip1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.splitContainer1)).BeginInit();
             this.splitContainer1.Panel1.SuspendLayout();
@@ -99,6 +100,7 @@
             // 
             // splitContainer1.Panel1
             // 
+            this.splitContainer1.Panel1.Controls.Add(this.contentAdaptiveRButton);
             this.splitContainer1.Panel1.Controls.Add(this.progressBar);
             this.splitContainer1.Panel1.Controls.Add(this.label2);
             this.splitContainer1.Panel1.Controls.Add(this.downscaleButton);
@@ -180,11 +182,11 @@
             // perceptualRButton
             // 
             this.perceptualRButton.AutoSize = true;
-            this.perceptualRButton.Font = new System.Drawing.Font("メイリオ", 9.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.perceptualRButton.Font = new System.Drawing.Font("メイリオ", 9.75F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
             this.perceptualRButton.Location = new System.Drawing.Point(15, 177);
             this.perceptualRButton.Margin = new System.Windows.Forms.Padding(6, 7, 6, 7);
             this.perceptualRButton.Name = "perceptualRButton";
-            this.perceptualRButton.Size = new System.Drawing.Size(95, 24);
+            this.perceptualRButton.Size = new System.Drawing.Size(101, 24);
             this.perceptualRButton.TabIndex = 5;
             this.perceptualRButton.TabStop = true;
             this.perceptualRButton.Text = "perceptual";
@@ -278,7 +280,7 @@
             // 
             this.splitContainer2.Panel2.Controls.Add(this.richTextBox1);
             this.splitContainer2.Size = new System.Drawing.Size(755, 541);
-            this.splitContainer2.SplitterDistance = 376;
+            this.splitContainer2.SplitterDistance = 371;
             this.splitContainer2.SplitterWidth = 9;
             this.splitContainer2.TabIndex = 0;
             // 
@@ -289,7 +291,7 @@
             this.canvas.Location = new System.Drawing.Point(0, 0);
             this.canvas.Margin = new System.Windows.Forms.Padding(6, 7, 6, 7);
             this.canvas.Name = "canvas";
-            this.canvas.Size = new System.Drawing.Size(755, 376);
+            this.canvas.Size = new System.Drawing.Size(755, 371);
             this.canvas.TabIndex = 0;
             this.canvas.TabStop = false;
             this.canvas.Paint += new System.Windows.Forms.PaintEventHandler(this.canvas_Paint);
@@ -301,7 +303,7 @@
             this.richTextBox1.Location = new System.Drawing.Point(0, 0);
             this.richTextBox1.Margin = new System.Windows.Forms.Padding(6, 7, 6, 7);
             this.richTextBox1.Name = "richTextBox1";
-            this.richTextBox1.Size = new System.Drawing.Size(755, 156);
+            this.richTextBox1.Size = new System.Drawing.Size(755, 161);
             this.richTextBox1.TabIndex = 0;
             this.richTextBox1.Text = "";
             // 
@@ -314,6 +316,20 @@
             this.backgroundWorker1.DoWork += new System.ComponentModel.DoWorkEventHandler(this.downscale_BGWork);
             this.backgroundWorker1.ProgressChanged += new System.ComponentModel.ProgressChangedEventHandler(this.backgroundWorker1_ProgressChanged);
             this.backgroundWorker1.RunWorkerCompleted += new System.ComponentModel.RunWorkerCompletedEventHandler(this.backgroundWorker1_RunWorkerCompleted);
+            // 
+            // contentAdaptiveRButton
+            // 
+            this.contentAdaptiveRButton.AutoSize = true;
+            this.contentAdaptiveRButton.Font = new System.Drawing.Font("メイリオ", 9.75F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.contentAdaptiveRButton.Location = new System.Drawing.Point(14, 199);
+            this.contentAdaptiveRButton.Margin = new System.Windows.Forms.Padding(6, 7, 6, 7);
+            this.contentAdaptiveRButton.Name = "contentAdaptiveRButton";
+            this.contentAdaptiveRButton.Size = new System.Drawing.Size(146, 24);
+            this.contentAdaptiveRButton.TabIndex = 11;
+            this.contentAdaptiveRButton.TabStop = true;
+            this.contentAdaptiveRButton.Text = "content-adaptive";
+            this.contentAdaptiveRButton.UseVisualStyleBackColor = true;
+            this.contentAdaptiveRButton.CheckedChanged += new System.EventHandler(this.radioButton_CheckedChanged);
             // 
             // Form1
             // 
@@ -368,6 +384,7 @@
         private System.Windows.Forms.TextBox scaleTBox;
         private System.ComponentModel.BackgroundWorker backgroundWorker1;
         private System.Windows.Forms.ProgressBar progressBar;
+        private System.Windows.Forms.RadioButton contentAdaptiveRButton;
     }
 }
 
