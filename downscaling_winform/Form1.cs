@@ -63,6 +63,10 @@ namespace downscaling_winform
                 {
                     // TODO?: zero check
                     double d = m11 * m22 - m12 * m21;
+                    if (Math.Abs(d) <= 1e-8)
+                    {
+                        return new Mat2x2(0, 0, 0, 0);
+                    }
                     double invd = 1.0 / d;
                     return new Mat2x2(m22 * invd, -m21 * invd, -m12 * invd, m11 * invd);
                 }
@@ -118,13 +122,141 @@ namespace downscaling_winform
             double[] g;
             int Rsize = 0;
 
+            unsafe Bitmap kernel2bmp(bool normal)
+            {
+                var a = normal ? g : w;
+
+                var bmp = new Bitmap(wi, hi, PixelFormat.Format32bppArgb);
+                using (var it = new FLib.BitmapIterator(bmp, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb))
+                {
+                    byte* data = it.Data;
+                    for (int ky = 0; ky < ho; ky++)
+                    {
+                        for (int kx = 0; kx < wo; kx++)
+                        {
+                            int k = kx + wo * ky;
+                            double cx = m[k].x;
+                            double cy = m[k].y;
+                            int rx0 = Math.Max((int)(cx - 2 * rx), 0);
+                            int rx1 = Math.Min((int)(cx + 2 * rx), wi - 1);
+                            int ry0 = Math.Max((int)(cy - 2 * ry), 0);
+                            int ry1 = Math.Min((int)(cy + 2 * ry), hi - 1);
+                            for (int iy = ry0; iy <= ry1; iy++)
+                            {
+                                for (int ix = rx0; ix <= rx1; ix++)
+                                {
+                                    double d = a[kidx(kx, ky, ix, iy)];
+                                    double n = Math.Pow(d, 0.125);
+                                    byte value = (byte)(n * 255.0);
+                                    if ((kx + ky) % 2 == 0)
+                                    {
+                                        data[4 * ix + iy * it.Stride + 0] = value;
+                                        data[4 * ix + iy * it.Stride + 1] = 0;
+                                        data[4 * ix + iy * it.Stride + 2] = value;
+                                        data[4 * ix + iy * it.Stride + 3] = 255;
+                                    }
+                                    else
+                                    {
+                                        data[4 * ix + iy * it.Stride + 0] = 0;
+                                        data[4 * ix + iy * it.Stride + 1] = value;
+                                        data[4 * ix + iy * it.Stride + 2] = 0;
+                                        data[4 * ix + iy * it.Stride + 3] = 255;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                return bmp;
+            }
+
+            unsafe Bitmap filter(Bitmap input)
+            {
+                var a = g;
+
+                var bmp = new Bitmap(wo, ho, PixelFormat.Format32bppArgb);
+                using (var it_in = new FLib.BitmapIterator(input, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb))
+                using (var it = new FLib.BitmapIterator(bmp, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb))
+                {
+                    byte* data_in = it_in.Data;
+                    byte* data = it.Data;
+                    for (int ky = 0; ky < ho; ky++)
+                    {
+                        for (int kx = 0; kx < wo; kx++)
+                        {
+                            int k = kx + wo * ky;
+                            double cx = m[k].x;
+                            double cy = m[k].y;
+                            int rx0 = Math.Max((int)(cx - 2 * rx), 0);
+                            int rx1 = Math.Min((int)(cx + 2 * rx), wi - 1);
+                            int ry0 = Math.Max((int)(cy - 2 * ry), 0);
+                            int ry1 = Math.Min((int)(cy + 2 * ry), hi - 1);
+                            double r = 0.0;
+                            double g = 0.0;
+                            double b = 0.0;
+                            double sum = 0;
+                            for (int iy = ry0; iy <= ry1; iy++)
+                            {
+                                for (int ix = rx0; ix <= rx1; ix++)
+                                {
+                                    double d = a[kidx(kx, ky, ix, iy)];
+                                    sum += d;
+                                    r += d * (data_in[4 * ix + iy * it_in.Stride + 2] / 255.0);
+                                    g += d * (data_in[4 * ix + iy * it_in.Stride + 1] / 255.0);
+                                    b += d * (data_in[4 * ix + iy * it_in.Stride + 0] / 255.0);
+                                }
+                            }
+                            r /= sum;
+                            g /= sum;
+                            b /= sum;
+
+                            data[4 * kx + ky * it.Stride + 2] = (byte)(255 * r);
+                            data[4 * kx + ky * it.Stride + 1] = (byte)(255 * g);
+                            data[4 * kx + ky * it.Stride + 0] = (byte)(255 * b);
+                            data[4 * kx + ky * it.Stride + 3] = 255;
+                        }
+                    }
+                }
+                return bmp;
+            }
+
+            unsafe void saveKernel(Bitmap input)
+            {
+                string saveDir = "./kernels";
+
+                try
+                {
+                    using (var bmp = kernel2bmp(false)) // w
+                    {
+                        string path = System.IO.Path.GetFullPath(saveDir + "/w-" + iteration + ".png");
+                        bmp.Save(path);
+                    }
+
+                    using (var bmp = kernel2bmp(true)) // w
+                    {
+                        string path = System.IO.Path.GetFullPath(saveDir + "/g-" + iteration + ".png");
+                        bmp.Save(path);
+                    }
+                    using (var bmp = filter(input)) // w
+                    {
+                        string path = System.IO.Path.GetFullPath(saveDir + "/output-" + iteration + ".png");
+                        bmp.Save(path);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex);
+                }
+            }
+
+
             System.Diagnostics.Stopwatch stopwatch = null;
             int stopwatchCnt = 0;
 
             void printElapsedTime(string prefix = "")
             {
-                Console.WriteLine($"[{stopwatchCnt}]{prefix}{stopwatch.ElapsedMilliseconds} ms.");
-                stopwatchCnt++;
+                //Console.WriteLine($"[{stopwatchCnt}]{prefix}{stopwatch.ElapsedMilliseconds} ms.");
+                //stopwatchCnt++;
             }
 
             unsafe void initialize(Bitmap input, Bitmap output)
@@ -147,10 +279,10 @@ namespace downscaling_winform
                 {
                     for (int kx = 0; kx < wo; kx++)
                     {
-                        m[k] = new Vec2(kx, ky);
-                        S[k] = new Mat2x2(rx / 3, 0, ry / 3, 0);
+                        m[k] = new Vec2(rx * (kx + 0.5), ry * (ky + 0.5));
+                        S[k] = new Mat2x2(rx / 3, 0, 0, ry / 3);
                         v[k] = new Vec3(0.5, 0.5, 0.5);
-                        s[k] = 1e-4;
+                        s[k] = 1e-4 * wi; // * wiしないと小さくなりすぎる？
                         k++;
                     }
                 }
@@ -183,6 +315,31 @@ namespace downscaling_winform
                 Rsize = (int)(4 * rx + 1) * (int)(4 * ry + 1);
                 w = new double[Rsize * wo * ho];
                 g = new double[Rsize * wo * ho];
+
+
+                for (int ky = 0; ky < ho; ky++)
+                {
+                    for (int kx = 0; kx < wo; kx++)
+                    {
+                        double cx = m[kx + ky * wo].x;
+                        double cy = m[kx + ky * wo].y;
+                        int rx0 = Math.Max((int)(cx - 2 * rx), 0);
+                        int rx1 = Math.Min((int)(cx + 2 * rx), wi - 1);
+                        int ry0 = Math.Max((int)(cy - 2 * ry), 0);
+                        int ry1 = Math.Min((int)(cy + 2 * ry), hi - 1);
+                        for (int iy = ry0; iy <= ry1; iy++)
+                        {
+                            for (int ix = rx0; ix <= rx1; ix++)
+                            {
+                                w[kidx(kx, ky, ix, iy)] = 1.0 / Rsize;
+                                g[kidx(kx, ky, ix, iy)] = 0.5 / Rsize;
+                            }
+                        }
+                    }
+                }
+
+
+
 
                 Console.WriteLine("[Content-Adaptive] initialize()");
                 printElapsedTime();
@@ -244,6 +401,8 @@ namespace downscaling_winform
                                 var Skinv = S[k].Inverse();
                                 double d = -0.5 * (pi_uk * Skinv * pi_uk) - Vec3.DistanceSqr(c[i], v[k]) / (2 * s[k] * s[k]);
                                 w[kidx(kx, ky, ix, iy)] = Math.Exp(d);
+                                System.Diagnostics.Debug.Assert(double.IsNaN(w[kidx(kx, ky, ix, iy)]) == false);
+                                System.Diagnostics.Debug.Assert(double.IsInfinity(w[kidx(kx, ky, ix, iy)]) == false);
                                 cnt++;
                                 // save i -> k
                                 i2k[i].Add(kx);
@@ -258,6 +417,8 @@ namespace downscaling_winform
                                 int i = ix + iy * wi;
                                 wsum += w[kidx(kx, ky, ix, iy)];
                                 cnt++;
+                                System.Diagnostics.Debug.Assert(double.IsNaN(wsum) == false);
+                                System.Diagnostics.Debug.Assert(double.IsInfinity(wsum) == false);
                             }
                         }
                         for (int iy = ry0; iy <= ry1; iy++)
@@ -267,6 +428,8 @@ namespace downscaling_winform
                                 int i = ix + iy * wi;
                                 w[kidx(kx, ky, ix, iy)] /= wsum;
                                 cnt++;
+
+                                System.Diagnostics.Debug.Assert(double.IsNaN(w[kidx(kx, ky, ix, iy)]) == false);
                             }
                         }
                     }
@@ -320,10 +483,105 @@ namespace downscaling_winform
             {
                 printElapsedTime("MStep");
 
-                // TODO
+                double diff = 0.0;
+
+                // compute all kernels
+#if ENABLE_MULTITHREADING
+                System.Threading.Tasks.Parallel.For(0, ho, (ky) =>
+#else
+                for (int ky = 0; ky < ho; ky++)
+#endif
+                {
+                    for (int kx = 0; kx < wo; kx++)
+                    {
+                        int k = kx + wo * ky;
+                        double cx = (kx + 0.5) * rx;
+                        double cy = (ky + 0.5) * ry;
+                        int rx0 = Math.Max((int)(cx - 2 * rx), 0);
+                        int rx1 = Math.Min((int)(cx + 2 * rx), wi - 1);
+                        int ry0 = Math.Max((int)(cy - 2 * ry), 0);
+                        int ry1 = Math.Min((int)(cy + 2 * ry), hi - 1);
+                        double wsum = 0.0;
+                        for (int iy = ry0; iy <= ry1; iy++)
+                        {
+                            for (int ix = rx0; ix <= rx1; ix++)
+                            {
+                                int i = ix + iy * wi;
+                                wsum += g[kidx(kx, ky, ix, iy)];
+                            }
+                        }
+
+                        var mk = m[k];
+                        S[k] = new Mat2x2(0, 0, 0, 0);
+                        m[k] = new Vec2(0, 0);
+                        v[k] = new Vec3(0, 0, 0);
+                        for (int iy = ry0; iy <= ry1; iy++)
+                        {
+                            for (int ix = rx0; ix <= rx1; ix++)
+                            {
+                                double gki = g[kidx(kx, ky, ix, iy)];
+                                int i = ix + iy * wi;
+                                double dx = ix - mk.x;
+                                double dy = iy - mk.y;
+                                S[k].m11 += gki * dx * dx;
+                                S[k].m12 += gki * dx * dy;
+                                S[k].m21 += gki * dy * dx;
+                                S[k].m22 += gki * dy * dy;
+                            }
+                        }
+                        S[k].m11 /= wsum;
+                        S[k].m12 /= wsum;
+                        S[k].m21 /= wsum;
+                        S[k].m22 /= wsum;
+
+                        for (int iy = ry0; iy <= ry1; iy++)
+                        {
+                            for (int ix = rx0; ix <= rx1; ix++)
+                            {
+                                double gki = g[kidx(kx, ky, ix, iy)];
+                                int i = ix + iy * wi;
+                                m[k].x += gki * ix;
+                                m[k].y += gki * iy;
+                            }
+                        }
+                        m[k].x /= wsum;
+                        m[k].y /= wsum;
 
 
-                return false;
+                        var prevX = v[k].x;
+                        var prevY = v[k].y;
+                        var prevZ = v[k].z;
+                        for (int iy = ry0; iy <= ry1; iy++)
+                        {
+                            for (int ix = rx0; ix <= rx1; ix++)
+                            {
+                                double gki = g[kidx(kx, ky, ix, iy)];
+                                int i = ix + iy * wi;
+                                v[k].x += gki * c[i].x;
+                                v[k].y += gki * c[i].y;
+                                v[k].z += gki * c[i].z;
+                            }
+                        }
+                        v[k].x /= wsum;
+                        v[k].y /= wsum;
+                        v[k].z /= wsum;
+
+                        double diffx = prevX - v[k].x;
+                        double diffy = prevY - v[k].y;
+                        double diffz = prevZ - v[k].z;
+                        diff += diffx * diffx + diffy * diffy + diffz * diffz;
+
+                        System.Diagnostics.Debug.Assert(double.IsNaN(diff) == false);
+                    }
+                }
+#if ENABLE_MULTITHREADING
+                );
+#endif
+
+                diff /= wo * ho;
+                Console.WriteLine($"[{iteration}] diff = {diff}");
+
+                return diff >= 0.05;
             }
 
             /// <returns>Has changed in C-Step</returns>
@@ -333,19 +591,29 @@ namespace downscaling_winform
 
                 // TODO
 
-                return false;
+                return true;
             }
+            int iteration = 0;
 
             public unsafe Bitmap Downscale(Bitmap input, Size newSize)
             {
+                iteration = 0;
                 Bitmap output = new Bitmap(newSize.Width, newSize.Height, input.PixelFormat);
 
                 initialize(input, output);
+                saveKernel(input);
                 while (true)
                 {
+                    iteration++;
+
                     EStep();
                     bool changedInMStep = MStep();
                     bool changedInCStep = CStep();
+
+                    if (iteration % 100 == 0)
+                    {
+                        saveKernel(input);
+                    }
                     if (!changedInMStep || !changedInCStep)
                     {
                         break;
