@@ -31,6 +31,17 @@ namespace downscaling_winform
                 {
                     return v1.x * v2.x + v1.y * v2.y;
                 }
+
+                public Vec2 NormalSafe()
+                {
+                    double lenSqr = x * x + y * y;
+                    if (lenSqr <= 1e-16)
+                    {
+                        return new Vec2(0, 0);
+                    }
+                    double len = Math.Sqrt(lenSqr);
+                    return new Vec2(x / len, y / len);
+                }
             }
             class Vec3
             {
@@ -143,8 +154,8 @@ namespace downscaling_winform
                         for (int kx = 0; kx < wo; kx++)
                         {
                             int k = kx + wo * ky;
-                            double cx = m[k].x;
-                            double cy = m[k].y;
+                            double cx = rx * (kx + 0.5);
+                            double cy = ry * (ky + 0.5);
                             int rx0 = Math.Max((int)(cx - 2 * rx), 0);
                             int rx1 = Math.Min((int)(cx + 2 * rx), wi - 1);
                             int ry0 = Math.Max((int)(cy - 2 * ry), 0);
@@ -155,6 +166,8 @@ namespace downscaling_winform
                             {
                                 for (int ix = rx0; ix <= rx1; ix++)
                                 {
+                                    System.Diagnostics.Debug.Assert(kidx(kx, ky, ix, iy) >= 0);
+
                                     double d = a[kidx(kx, ky, ix, iy)];
                                     max = Math.Max(max, Math.Log10(d));
                                     min = Math.Min(min, Math.Log10(d));
@@ -172,22 +185,25 @@ namespace downscaling_winform
                             {
                                 for (int ix = rx0; ix <= rx1; ix++)
                                 {
+                                    int ox = (int)(m[k].x - 2 * rx) + ix - (int)(cx - 2 * rx);
+                                    int oy = (int)(m[k].y - 2 * ry) + iy - (int)(cy - 2 * ry);
+
                                     double d = a[kidx(kx, ky, ix, iy)];
                                     double n = (Math.Log10(d) - min) / (max - min);
                                     byte value = (byte)(n * 255.0);
                                     if ((kx + ky) % 2 == 0)
                                     {
-                                        data[4 * ix + iy * it.Stride + 0] = value;
-                                        data[4 * ix + iy * it.Stride + 1] = 0;
-                                        data[4 * ix + iy * it.Stride + 2] = value;
-                                        data[4 * ix + iy * it.Stride + 3] = 255;
+                                        data[4 * ox + oy * it.Stride + 0] = value;
+                                        data[4 * ox + oy * it.Stride + 1] = 0;
+                                        data[4 * ox + oy * it.Stride + 2] = value;
+                                        data[4 * ox + oy * it.Stride + 3] = 255;
                                     }
                                     else
                                     {
-                                        data[4 * ix + iy * it.Stride + 0] = 0;
-                                        data[4 * ix + iy * it.Stride + 1] = value;
-                                        data[4 * ix + iy * it.Stride + 2] = 0;
-                                        data[4 * ix + iy * it.Stride + 3] = 255;
+                                        data[4 * ox + oy * it.Stride + 0] = 0;
+                                        data[4 * ox + oy * it.Stride + 1] = value;
+                                        data[4 * ox + oy * it.Stride + 2] = 0;
+                                        data[4 * ox + oy * it.Stride + 3] = 255;
                                     }
                                 }
                             }
@@ -212,8 +228,8 @@ namespace downscaling_winform
                         for (int kx = 0; kx < wo; kx++)
                         {
                             int k = kx + wo * ky;
-                            double cx = m[k].x;
-                            double cy = m[k].y;
+                            double cx = rx * (kx + 0.5);
+                            double cy = ry * (ky + 0.5);
                             int rx0 = Math.Max((int)(cx - 2 * rx), 0);
                             int rx1 = Math.Min((int)(cx + 2 * rx), wi - 1);
                             int ry0 = Math.Max((int)(cy - 2 * ry), 0);
@@ -226,11 +242,15 @@ namespace downscaling_winform
                             {
                                 for (int ix = rx0; ix <= rx1; ix++)
                                 {
+                                    int ox = (int)(m[k].x - 2 * rx) + ix - (int)(cx - 2 * rx);
+                                    int oy = (int)(m[k].y - 2 * ry) + iy - (int)(cy - 2 * ry);
+
+
                                     double d = a[kidx(kx, ky, ix, iy)];
                                     sum += d;
-                                    r += d * (data_in[4 * ix + iy * it_in.Stride + 2] / 255.0);
-                                    g += d * (data_in[4 * ix + iy * it_in.Stride + 1] / 255.0);
-                                    b += d * (data_in[4 * ix + iy * it_in.Stride + 0] / 255.0);
+                                    r += d * (data_in[4 * ox + oy * it_in.Stride + 2] / 255.0);
+                                    g += d * (data_in[4 * ox + oy * it_in.Stride + 1] / 255.0);
+                                    b += d * (data_in[4 * ox + oy * it_in.Stride + 0] / 255.0);
                                 }
                             }
                             r /= sum;
@@ -383,9 +403,13 @@ namespace downscaling_winform
                 int ry1 = Math.Min((int)(cy + 2 * ry), hi - 1);
                 int x = ix - rx0;
                 int y = iy - ry0;
-                int offset = (kx + ky * wo) * Rsize;
-                int idx = x + y * (rx1 - rx0 + 1) + offset;
-                return idx;
+                if (0 <= x && x < 4 * rx + 1 && 0 <= y && y < 4 * ry + 1)
+                {
+                    int offset = (kx + ky * wo) * Rsize;
+                    int idx = x + y * (rx1 - rx0 + 1) + offset;
+                    return idx;
+                }
+                return -1;
             }
 
             void EStep()
@@ -711,12 +735,95 @@ namespace downscaling_winform
 
                     // Shape constraints
 
-                    // TODO
+                    for (int ky = 0; ky < ho; ky++)
+                    {
+                        for (int kx = 0; kx < wo; kx++)
+                        {
+                            double cx = (kx + 0.5) * rx;
+                            double cy = (ky + 0.5) * ry;
+                            int rx0 = Math.Max((int)(cx - 2 * rx), 0);
+                            int rx1 = Math.Min((int)(cx + 2 * rx), wi - 1);
+                            int ry0 = Math.Max((int)(cy - 2 * ry), 0);
+                            int ry1 = Math.Min((int)(cy + 2 * ry), hi - 1);
 
+                            int k = kx + ky * wo;
 
+                            for (int ny = ky - 1; ny <= ky + 1; ny++)
+                            {
+                                for (int nx = kx - 1; nx <= kx + 1; nx++)
+                                {
+                                    if (nx == kx && ny == ky)
+                                    {
+                                        continue;
+                                    }
+                                    if (nx < 0 || wo <= nx || ny < 0 || ho <= ny)
+                                    {
+                                        continue;
+                                    }
 
+                                    int n = nx + ny * wo;
 
+                                    var d = new Vec2(nx - kx, ny - ky);
 
+                                    double _s = 0;
+                                    for (int iy = ry0; iy <= ry1; iy++)
+                                    {
+                                        for (int ix = rx0; ix <= rx1; ix++)
+                                        {
+                                            int i = ix + iy * wi;
+
+                                            double dpmx = ix - m[k].x;
+                                            double dpmy = iy - m[k].y;
+                                            double val = Math.Max(0, dpmx * d.x + dpmy * d.y);
+                                            _s += g[kidx(kx, ky, ix, iy)] * val * val;
+                                        }
+                                    }
+
+                                    double _f = 0.0;
+                                    for (int iy = ry0; iy <= ry1; iy++)
+                                    {
+                                        for (int ix = rx0; ix <= rx1; ix++)
+                                        {
+                                            int i = ix + iy * wi;
+
+                                            double dpmx = ix - m[k].x;
+                                            double dpmy = iy - m[k].y;
+                                            double val = Math.Max(0, dpmx * d.x + dpmy * d.y);
+                                            int nidx = kidx(nx, ny, ix, iy);
+                                            _f += g[kidx(kx, ky, ix, iy)] * (nidx < 0 ? 0.0 : g[nidx]);
+                                        }
+                                    }
+
+                                    var o = new Vec2(0, 0);
+                                    for (int iy = ry0 + 1; iy <= ry1; iy++)
+                                    {
+                                        for (int ix = rx0 + 1; ix <= rx1; ix++)
+                                        {
+                                            int nidx01 = kidx(nx, ny, ix - 1, iy);
+                                            double gndix01 = nidx01 < 0 ? 0.0 : g[nidx01];
+                                            int nidx10 = kidx(nx, ny, ix, iy - 1);
+                                            double gndix10 = nidx10 < 0 ? 0.0 : g[nidx10];
+                                            int nidx11 = kidx(nx, ny, ix, iy);
+                                            double gndix11 = nidx11 < 0 ? 0.0 : g[nidx11];
+                                            double val01 = g[kidx(kx, ky, ix - 1, iy)] / (g[kidx(kx, ky, ix - 1, iy)] + gndix01);
+                                            double val10 = g[kidx(kx, ky, ix, iy - 1)] / (g[kidx(kx, ky, ix, iy - 1)] + gndix10);
+                                            double val11 = g[kidx(kx, ky, ix, iy)] / (g[kidx(kx, ky, ix, iy)] + gndix11);
+                                            o.x += val11 - val01;
+                                            o.y += val11 - val10;
+                                        }
+                                    }
+
+                                    var cos = o.NormalSafe() * d.NormalSafe();
+
+                                    if (_s > 0.2 * rx || (_f < 0.08 && cos < Math.Cos(Math.PI * 25 / 180)))
+                                    {
+                                        s[k] = 1.1 * s[k];
+                                        s[n] = 1.1 * s[n];
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -743,7 +850,7 @@ namespace downscaling_winform
                     bool changedInMStep = MStep();
                     bool changedInCStep = CStep();
 
-                    if (iteration % 10 == 0)
+                    if (iteration % 1 == 0)
                     {
                         saveKernel(input);
                     }
