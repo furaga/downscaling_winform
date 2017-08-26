@@ -302,15 +302,15 @@ namespace downscaling_winform
 
             void printElapsedTime(string prefix = "")
             {
-                //Console.WriteLine($"[{stopwatchCnt}]{prefix}{stopwatch.ElapsedMilliseconds} ms.");
-                //stopwatchCnt++;
+                Console.WriteLine($"[{stopwatchCnt}]{prefix}{stopwatch.ElapsedMilliseconds} ms.");
+                stopwatchCnt++;
             }
 
             unsafe void initialize(Bitmap input, Bitmap output)
             {
                 stopwatch = System.Diagnostics.Stopwatch.StartNew();
                 stopwatchCnt = 0;
-                printElapsedTime();
+                
                 wi = input.Width;
                 hi = input.Height;
                 wo = output.Width;
@@ -333,7 +333,7 @@ namespace downscaling_winform
                         k++;
                     }
                 }
-                printElapsedTime();
+                
 
                 c = new Vec3[wi * hi];
                 using (var i_it = new FLib.BitmapIterator(input, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb))
@@ -350,12 +350,11 @@ namespace downscaling_winform
                             double b = i_data[i_idx + 2] / 255.0;
 
                             // TODO: convert to CIELAB
-                            // めんどくさい
                             c[i] = new Vec3(r, g, b);
                         }
                     }
                 }
-                printElapsedTime();
+                
 
                 // NOTE: (wo * ho) * (wi * hi) happened out of memory error.
                 // We should save only the region Rk for each kernel k.
@@ -389,7 +388,7 @@ namespace downscaling_winform
 
 
                 Console.WriteLine("[Content-Adaptive] initialize()");
-                printElapsedTime();
+                
             }
 
             // get index with the value is wk[i] (or gk[i] in pseude code.
@@ -414,8 +413,6 @@ namespace downscaling_winform
 
             void EStep()
             {
-                printElapsedTime("EStep");
-
                 int kNum = wo * ho;
 
                 var i2k = new List<int>[wi * hi];
@@ -423,10 +420,7 @@ namespace downscaling_winform
                 {
                     i2k[i] = new List<int>();
                 }
-
-                printElapsedTime();
-
-                int cnt = 0;
+                
                 // compute all kernels
 #if ENABLE_MULTITHREADING
                 System.Threading.Tasks.Parallel.For(0, ho, (ky) =>
@@ -456,9 +450,7 @@ namespace downscaling_winform
                                 d = Math.Min(d, 700);
 
                                 w[kidx(kx, ky, ix, iy)] = Math.Exp(d);
-                                System.Diagnostics.Debug.Assert(double.IsNaN(w[kidx(kx, ky, ix, iy)]) == false);
-                                System.Diagnostics.Debug.Assert(double.IsInfinity(w[kidx(kx, ky, ix, iy)]) == false);
-                                cnt++;
+
                                 // save i -> k
                                 i2k[i].Add(kx);
                                 i2k[i].Add(ky);
@@ -471,9 +463,6 @@ namespace downscaling_winform
                             {
                                 int i = ix + iy * wi;
                                 wsum += w[kidx(kx, ky, ix, iy)];
-                                cnt++;
-                                System.Diagnostics.Debug.Assert(double.IsNaN(wsum) == false);
-                                System.Diagnostics.Debug.Assert(double.IsInfinity(wsum) == false);
                             }
                         }
                         for (int iy = ry0; iy <= ry1; iy++)
@@ -482,9 +471,6 @@ namespace downscaling_winform
                             {
                                 int i = ix + iy * wi;
                                 w[kidx(kx, ky, ix, iy)] /= wsum;
-                                cnt++;
-
-                                System.Diagnostics.Debug.Assert(double.IsNaN(w[kidx(kx, ky, ix, iy)]) == false);
                             }
                         }
                     }
@@ -492,9 +478,6 @@ namespace downscaling_winform
 #if ENABLE_MULTITHREADING
                 );
 #endif
-
-                printElapsedTime("(cnt = " + cnt + ")");
-                cnt = 0;
 
                 // Normalize per pixel
 #if ENABLE_MULTITHREADING
@@ -513,8 +496,6 @@ namespace downscaling_winform
                             int kx = i2ki[j + 0];
                             int ky = i2ki[j + 1];
                             wsum += w[kidx(kx, ky, ix, iy)]; // bottle neck!
-                            System.Diagnostics.Debug.Assert(double.IsNaN(wsum) == false);
-                            cnt++;
                         }
                         if (wsum == 0)
                         {
@@ -524,8 +505,6 @@ namespace downscaling_winform
                                 int ky = i2ki[j + 1];
                                 var ki = kidx(kx, ky, ix, iy);
                                 g[ki] = 0; // bottle neck!
-                                System.Diagnostics.Debug.Assert(double.IsNaN(g[ki]) == false);
-                                cnt++;
                             }
                         }
                         else
@@ -536,8 +515,6 @@ namespace downscaling_winform
                                 int ky = i2ki[j + 1];
                                 var ki = kidx(kx, ky, ix, iy);
                                 g[ki] = w[ki] / wsum; // bottle neck!
-                                System.Diagnostics.Debug.Assert(double.IsNaN(g[ki]) == false);
-                                cnt++;
                             }
                         }
                     }
@@ -545,16 +522,11 @@ namespace downscaling_winform
 #if ENABLE_MULTITHREADING
                 );
 #endif
-
-                printElapsedTime("(cnt = " + cnt + ")");
-                cnt = 0;
             }
 
             /// <returns>Has changed in M-Step</returns>
             bool MStep()
             {
-                printElapsedTime("MStep");
-
                 double diff = 0.0;
 
                 // compute all kernels
@@ -651,7 +623,7 @@ namespace downscaling_winform
 #endif
 
                 diff /= wo * ho;
-                Console.WriteLine($"[{iteration}] diff = {diff}");
+                Console.WriteLine($"diff = {diff} (iter = {iteration})");
 
                 return diff >= 0.05;
             }
@@ -666,8 +638,6 @@ namespace downscaling_winform
             {
                 try
                 {
-                    printElapsedTime("CStep");
-
                     // Spatial constraints
                     var mAve = new Vec2[wo * ho];
                     for (int ky = 0; ky < ho; ky++)
@@ -841,18 +811,23 @@ namespace downscaling_winform
                 Bitmap output = new Bitmap(newSize.Width, newSize.Height, input.PixelFormat);
 
                 initialize(input, output);
+                printElapsedTime(" - initialize()");
                 saveKernel(input);
                 while (true)
                 {
                     iteration++;
 
                     EStep();
+                    printElapsedTime(" - EStep() ");
                     bool changedInMStep = MStep();
+                    printElapsedTime(" - MStep() ");
                     bool changedInCStep = CStep();
+                    printElapsedTime(" - CStep() ");
 
                     if (iteration % 1 == 0)
                     {
                         saveKernel(input);
+                        printElapsedTime(" - saveKernel() ");
                     }
                     if (!changedInMStep || !changedInCStep)
                     {
