@@ -1,4 +1,6 @@
-﻿using System;
+﻿//#define ENABLE_MULTITHREADING
+
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -14,10 +16,349 @@ namespace downscaling_winform
     public partial class Form1 : Form
     {
         // Content-Adaptive Downscaling [Koph, et al., SIGGRAPH Asia 2013]
+        class ContentAdaptiveDownscale
+        {
+            class Vec2
+            {
+                public double x;
+                public double y;
+                public Vec2(double x, double y) { this.x = x; this.y = y; }
+                public static Vec2 operator *(Vec2 v, Mat2x2 m)
+                {
+                    return new Vec2(v.x * m.m11 + v.y * m.m21, v.x * m.m12 + v.y * m.m22);
+                }
+                public static double operator *(Vec2 v1, Vec2 v2)
+                {
+                    return v1.x * v2.x + v1.y * v2.y;
+                }
+            }
+            class Vec3
+            {
+                public double x;
+                public double y;
+                public double z;
+                public Vec3(double x, double y, double z) { this.x = x; this.y = y; this.z = z; }
+                public static double DistanceSqr(Vec3 v1, Vec3 v2)
+                {
+                    double dx = v1.x - v2.x;
+                    double dy = v1.y - v2.y;
+                    double dz = v1.z - v2.z;
+                    return dx * dx + dy * dy + dz * dz;
+                }
+            }
+            class Mat2x2
+            {
+                // [m11, m12]
+                // [m21, m22]
+
+                public double m11, m12, m21, m22;
+                public Mat2x2(double m11, double m12, double m21, double m22)
+                {
+                    this.m11 = m11;
+                    this.m12 = m12;
+                    this.m21 = m21;
+                    this.m22 = m22;
+                }
+                public Mat2x2 Inverse()
+                {
+                    // TODO?: zero check
+                    double d = m11 * m22 - m12 * m21;
+                    double invd = 1.0 / d;
+                    return new Mat2x2(m22 * invd, -m21 * invd, -m12 * invd, m11 * invd);
+                }
+
+                public void SVD(out Mat2x2 U, out Mat2x2 S, out Mat2x2 V)
+                {
+                    // accoding to the web page:
+                    // "Singular value decomposition of a 2x2 matrix - Philippe Lucidarme"
+                    double a = m11;
+                    double b = m12;
+                    double c = m21;
+                    double d = m22;
+
+                    double v1 = 2 * a * c + 2 * b * d;
+                    double v2 = a * a + b * b - c * c - d * d;
+                    double theta = 0.5 * Math.Atan2(v1, v2);
+                    U = new Mat2x2(Math.Cos(theta), -Math.Sin(theta), Math.Sin(theta), Math.Cos(theta));
+
+                    double S1 = a * a + b * b + c * c + d * d;
+                    double S2 = Math.Sqrt(v2 * v2 + v1 * v1);
+                    double s1 = Math.Sqrt((S1 + S2) * 0.5);
+                    double s2 = Math.Sqrt((S1 - S2) * 0.5);
+                    S = new Mat2x2(s1, 0, 0, s2);
+
+                    double u1 = 2 * a * b + 2 * c * d;
+                    double u2 = a * a - b * b + c * c - d * d;
+                    double phi = 0.5 * Math.Atan2(u1, u2);
+                    double cp = Math.Cos(phi);
+                    double sp = Math.Sin(phi);
+                    double ct = Math.Cos(theta);
+                    double st = Math.Sin(theta);
+                    double s11 = (a * ct + c * st) * cp + (b * ct + d * st) * sp;
+                    double s22 = (a * st - c * ct) * sp + (-b * st + d * ct) * cp;
+                    double sign_s11 = Math.Sign(s11);
+                    double sign_s22 = Math.Sign(s22);
+                    System.Diagnostics.Debug.Assert(sign_s11 == 1.0 || sign_s11 == -1.0);
+                    V = new Mat2x2(sign_s11 * cp, -sign_s22 * sp, sign_s11 * sp, sign_s22 * cp);
+
+                    // TODO: verification
+                }
+            }
+
+            int wi, hi;
+            int wo, ho;
+            double rx, ry;
+
+            Vec2[] m;
+            Mat2x2[] S;
+            Vec3[] v;
+            double[] s;
+            Vec3[] c; // CIELAB, [0, 1]
+            double[] w;
+            double[] g;
+            int Rsize = 0;
+
+            System.Diagnostics.Stopwatch stopwatch = null;
+            int stopwatchCnt = 0;
+
+            void printElapsedTime(string prefix = "")
+            {
+                Console.WriteLine($"[{stopwatchCnt}]{prefix}{stopwatch.ElapsedMilliseconds} ms.");
+                stopwatchCnt++;
+            }
+
+            unsafe void initialize(Bitmap input, Bitmap output)
+            {
+                stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                stopwatchCnt = 0;
+                printElapsedTime();
+                wi = input.Width;
+                hi = input.Height;
+                wo = output.Width;
+                ho = output.Height;
+                rx = (double)wi / wo;
+                ry = (double)hi / ho;
+                m = new Vec2[wo * ho];
+                S = new Mat2x2[wo * ho];
+                v = new Vec3[wo * ho];
+                s = new double[wo * ho];
+                int k = 0;
+                for (int ky = 0; ky < ho; ky++)
+                {
+                    for (int kx = 0; kx < wo; kx++)
+                    {
+                        m[k] = new Vec2(kx, ky);
+                        S[k] = new Mat2x2(rx / 3, 0, ry / 3, 0);
+                        v[k] = new Vec3(0.5, 0.5, 0.5);
+                        s[k] = 1e-4;
+                        k++;
+                    }
+                }
+                printElapsedTime();
+
+                c = new Vec3[wi * hi];
+                using (var i_it = new FLib.BitmapIterator(input, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb))
+                {
+                    byte* i_data = (byte*)i_it.PixelData;
+                    for (int iy = 0; iy < input.Height; iy++)
+                    {
+                        for (int ix = 0; ix < input.Width; ix++)
+                        {
+                            int i = ix + iy * input.Width;
+                            int i_idx = 4 * ix + iy * i_it.Stride;
+                            double r = i_data[i_idx + 0] / 255.0;
+                            double g = i_data[i_idx + 1] / 255.0;
+                            double b = i_data[i_idx + 2] / 255.0;
+
+                            // TODO: convert to CIELAB
+                            // めんどくさい
+                            c[i] = new Vec3(r, g, b);
+                        }
+                    }
+                }
+                printElapsedTime();
+
+                // NOTE: (wo * ho) * (wi * hi) happened out of memory error.
+                // We should save only the region Rk for each kernel k.
+                Rsize = (int)(4 * rx + 1) * (int)(4 * ry + 1);
+                w = new double[Rsize * wo * ho];
+                g = new double[Rsize * wo * ho];
+
+                Console.WriteLine("[Content-Adaptive] initialize()");
+                printElapsedTime();
+            }
+
+            // get index with the value is wk[i] (or gk[i] in pseude code.
+            int kidx(int kx, int ky, int ix, int iy)
+            {
+                double cx = (kx + 0.5) * rx;
+                double cy = (ky + 0.5) * ry;
+                int rx0 = Math.Max((int)(cx - 2 * rx), 0);
+                int rx1 = Math.Min((int)(cx + 2 * rx), wi - 1);
+                int ry0 = Math.Max((int)(cy - 2 * ry), 0);
+                int ry1 = Math.Min((int)(cy + 2 * ry), hi - 1);
+                int x = ix - rx0;
+                int y = iy - ry0;
+                int offset = (kx + ky * wo) * Rsize;
+                int idx = x + y * (rx1 - rx0 + 1) + offset;
+                return idx;
+            }
+
+            void EStep()
+            {
+                printElapsedTime("EStep");
+
+                int kNum = wo * ho;
+
+                var i2k = new List<int>[wi * hi];
+                for (int i = 0; i < i2k.Length; i++)
+                {
+                    i2k[i] = new List<int>();
+                }
+
+                printElapsedTime();
+
+                int cnt = 0;
+                // compute all kernels
+#if ENABLE_MULTITHREADING
+                System.Threading.Tasks.Parallel.For(0, ho, (ky) =>
+#else
+                for (int ky = 0; ky < ho; ky++)
+#endif
+                {
+                    for (int kx = 0; kx < wo; kx++)
+                    {
+                        int k = kx + wo * ky;
+                        double cx = (kx + 0.5) * rx;
+                        double cy = (ky + 0.5) * ry;
+                        int rx0 = Math.Max((int)(cx - 2 * rx), 0);
+                        int rx1 = Math.Min((int)(cx + 2 * rx), wi - 1);
+                        int ry0 = Math.Max((int)(cy - 2 * ry), 0);
+                        int ry1 = Math.Min((int)(cy + 2 * ry), hi - 1);
+                        for (int iy = ry0; iy <= ry1; iy++)
+                        {
+                            for (int ix = rx0; ix <= rx1; ix++)
+                            {
+                                int i = ix + iy * wi;
+                                var pi_uk = new Vec2(ix - m[k].x, iy - m[k].y);
+                                var Skinv = S[k].Inverse();
+                                double d = -0.5 * (pi_uk * Skinv * pi_uk) - Vec3.DistanceSqr(c[i], v[k]) / (2 * s[k] * s[k]);
+                                w[kidx(kx, ky, ix, iy)] = Math.Exp(d);
+                                cnt++;
+                                // save i -> k
+                                i2k[i].Add(kx);
+                                i2k[i].Add(ky);
+                            }
+                        }
+                        double wsum = 0.0;
+                        for (int iy = ry0; iy <= ry1; iy++)
+                        {
+                            for (int ix = rx0; ix <= rx1; ix++)
+                            {
+                                int i = ix + iy * wi;
+                                wsum += w[kidx(kx, ky, ix, iy)];
+                                cnt++;
+                            }
+                        }
+                        for (int iy = ry0; iy <= ry1; iy++)
+                        {
+                            for (int ix = rx0; ix <= rx1; ix++)
+                            {
+                                int i = ix + iy * wi;
+                                w[kidx(kx, ky, ix, iy)] /= wsum;
+                                cnt++;
+                            }
+                        }
+                    }
+                }
+#if ENABLE_MULTITHREADING
+                );
+#endif
+
+                printElapsedTime("(cnt = " + cnt + ")");
+                cnt = 0;
+
+                // Normalize per pixel
+#if ENABLE_MULTITHREADING
+                System.Threading.Tasks.Parallel.For(0, hi, (iy) =>
+#else
+                for (int iy = 0; iy < hi; iy++)
+#endif
+                {
+                    for (int ix = 0; ix < wi; ix++)
+                    {
+                        int i = ix + iy * wi;
+                        double wsum = 0.0;
+                        var i2ki = i2k[i];
+                        for (int j = 0; j < i2ki.Count; j += 2)
+                        {
+                            int kx = i2ki[j + 0];
+                            int ky = i2ki[j + 1];
+                            wsum += w[kidx(kx, ky, ix, iy)]; // bottle neck!
+                            cnt++;
+                        }
+                        for (int j = 0; j < i2k[i].Count; j += 2)
+                        {
+                            int kx = i2ki[j + 0];
+                            int ky = i2ki[j + 1];
+                            var ki = kidx(kx, ky, ix, iy);
+                            g[ki] = w[ki] / wsum; // bottle neck!
+                            cnt++;
+                        }
+                    }
+                }
+#if ENABLE_MULTITHREADING
+                );
+#endif
+
+                printElapsedTime("(cnt = " + cnt + ")");
+                cnt = 0;
+            }
+
+            /// <returns>Has changed in M-Step</returns>
+            bool MStep()
+            {
+                printElapsedTime("MStep");
+
+                // TODO
+
+
+                return false;
+            }
+
+            /// <returns>Has changed in C-Step</returns>
+            bool CStep()
+            {
+                printElapsedTime("CStep");
+
+                // TODO
+
+                return false;
+            }
+
+            public unsafe Bitmap Downscale(Bitmap input, Size newSize)
+            {
+                Bitmap output = new Bitmap(newSize.Width, newSize.Height, input.PixelFormat);
+
+                initialize(input, output);
+                while (true)
+                {
+                    EStep();
+                    bool changedInMStep = MStep();
+                    bool changedInCStep = CStep();
+                    if (!changedInMStep || !changedInCStep)
+                    {
+                        break;
+                    }
+                }
+
+                return output;
+            }
+        }
+
         unsafe Bitmap contentAdaptive(Bitmap input, Size newSize)
         {
-            var output = input;
-            return output;
+            return new ContentAdaptiveDownscale().Downscale(input, newSize);
         }
 
 
@@ -27,7 +368,7 @@ namespace downscaling_winform
 
 
 
-        #region DownscaleMethods
+#region DownscaleMethods
         class Kernel
         {
             public double[] Data { get; private set; } = null;
@@ -121,8 +462,6 @@ namespace downscaling_winform
 
         unsafe Bitmap bicubic(Bitmap input, Size newSize, double a)
         {
-            Console.WriteLine($"[bicubic] a = {a}");
-
             Bitmap bmp = input;
             int width = newSize.Width;
             int height = newSize.Height;
@@ -457,7 +796,7 @@ namespace downscaling_winform
             var output = toBitmap(DR, DG, DB, input.PixelFormat);
             return output;
         }
-        #endregion
+#endregion
 
         class ShowImageCollection
         {
