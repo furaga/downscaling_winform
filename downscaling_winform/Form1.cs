@@ -52,6 +52,17 @@ namespace downscaling_winform
                 // [m21, m22]
 
                 public double m11, m12, m21, m22;
+
+                public static Mat2x2 operator *(Mat2x2 mat1, Mat2x2 mat2)
+                {
+                    return new Mat2x2(
+                        mat1.m11 * mat2.m11 + mat1.m12 * mat2.m21,
+                        mat1.m11 * mat2.m12 + mat1.m12 * mat2.m22,
+                        mat1.m21 * mat2.m11 + mat1.m22 * mat2.m21,
+                        mat1.m21 * mat2.m12 + mat1.m22 * mat2.m22
+                    );
+                }
+
                 public Mat2x2(double m11, double m12, double m21, double m22)
                 {
                     this.m11 = m11;
@@ -61,7 +72,6 @@ namespace downscaling_winform
                 }
                 public Mat2x2 Inverse()
                 {
-                    // TODO?: zero check
                     double d = m11 * m22 - m12 * m21;
                     if (Math.Abs(d) <= 1e-8)
                     {
@@ -71,10 +81,10 @@ namespace downscaling_winform
                     return new Mat2x2(m22 * invd, -m21 * invd, -m12 * invd, m11 * invd);
                 }
 
-                public void SVD(out Mat2x2 U, out Mat2x2 S, out Mat2x2 V)
+                public void SVD(out Mat2x2 U, out Mat2x2 S, out Mat2x2 Vt)
                 {
                     // accoding to the web page:
-                    // "Singular value decomposition of a 2x2 matrix - Philippe Lucidarme"
+                    // http://www.lucidarme.me/?p=4624
                     double a = m11;
                     double b = m12;
                     double c = m21;
@@ -103,9 +113,7 @@ namespace downscaling_winform
                     double sign_s11 = Math.Sign(s11);
                     double sign_s22 = Math.Sign(s22);
                     System.Diagnostics.Debug.Assert(sign_s11 == 1.0 || sign_s11 == -1.0);
-                    V = new Mat2x2(sign_s11 * cp, -sign_s22 * sp, sign_s11 * sp, sign_s22 * cp);
-
-                    // TODO: verification
+                    Vt = new Mat2x2(sign_s11 * cp, sign_s11 * sp, -sign_s22 * sp, sign_s22 * cp);
                 }
             }
 
@@ -141,12 +149,31 @@ namespace downscaling_winform
                             int rx1 = Math.Min((int)(cx + 2 * rx), wi - 1);
                             int ry0 = Math.Max((int)(cy - 2 * ry), 0);
                             int ry1 = Math.Min((int)(cy + 2 * ry), hi - 1);
+                            double max = double.MinValue;
+                            double min = double.MaxValue;
                             for (int iy = ry0; iy <= ry1; iy++)
                             {
                                 for (int ix = rx0; ix <= rx1; ix++)
                                 {
                                     double d = a[kidx(kx, ky, ix, iy)];
-                                    double n = Math.Pow(d, 0.125);
+                                    max = Math.Max(max, Math.Log10(d));
+                                    min = Math.Min(min, Math.Log10(d));
+                                    if (double.IsNegativeInfinity(min))
+                                    {
+                                        min = double.MinValue;
+                                    }
+                                }
+                            }
+                            if (max == min)
+                            {
+                                max = min + 1.0;
+                            }
+                            for (int iy = ry0; iy <= ry1; iy++)
+                            {
+                                for (int ix = rx0; ix <= rx1; ix++)
+                                {
+                                    double d = a[kidx(kx, ky, ix, iy)];
+                                    double n = (Math.Log10(d) - min) / (max - min);
                                     byte value = (byte)(n * 255.0);
                                     if ((kx + ky) % 2 == 0)
                                     {
@@ -400,6 +427,10 @@ namespace downscaling_winform
                                 var pi_uk = new Vec2(ix - m[k].x, iy - m[k].y);
                                 var Skinv = S[k].Inverse();
                                 double d = -0.5 * (pi_uk * Skinv * pi_uk) - Vec3.DistanceSqr(c[i], v[k]) / (2 * s[k] * s[k]);
+
+                                // 微妙？
+                                d = Math.Min(d, 700);
+
                                 w[kidx(kx, ky, ix, iy)] = Math.Exp(d);
                                 System.Diagnostics.Debug.Assert(double.IsNaN(w[kidx(kx, ky, ix, iy)]) == false);
                                 System.Diagnostics.Debug.Assert(double.IsInfinity(w[kidx(kx, ky, ix, iy)]) == false);
@@ -458,15 +489,32 @@ namespace downscaling_winform
                             int kx = i2ki[j + 0];
                             int ky = i2ki[j + 1];
                             wsum += w[kidx(kx, ky, ix, iy)]; // bottle neck!
+                            System.Diagnostics.Debug.Assert(double.IsNaN(wsum) == false);
                             cnt++;
                         }
-                        for (int j = 0; j < i2k[i].Count; j += 2)
+                        if (wsum == 0)
                         {
-                            int kx = i2ki[j + 0];
-                            int ky = i2ki[j + 1];
-                            var ki = kidx(kx, ky, ix, iy);
-                            g[ki] = w[ki] / wsum; // bottle neck!
-                            cnt++;
+                            for (int j = 0; j < i2k[i].Count; j += 2)
+                            {
+                                int kx = i2ki[j + 0];
+                                int ky = i2ki[j + 1];
+                                var ki = kidx(kx, ky, ix, iy);
+                                g[ki] = 0; // bottle neck!
+                                System.Diagnostics.Debug.Assert(double.IsNaN(g[ki]) == false);
+                                cnt++;
+                            }
+                        }
+                        else
+                        {
+                            for (int j = 0; j < i2k[i].Count; j += 2)
+                            {
+                                int kx = i2ki[j + 0];
+                                int ky = i2ki[j + 1];
+                                var ki = kidx(kx, ky, ix, iy);
+                                g[ki] = w[ki] / wsum; // bottle neck!
+                                System.Diagnostics.Debug.Assert(double.IsNaN(g[ki]) == false);
+                                cnt++;
+                            }
                         }
                     }
                 }
@@ -584,15 +632,100 @@ namespace downscaling_winform
                 return diff >= 0.05;
             }
 
+            double clamp(double v, double min, double max)
+            {
+                return v < min ? min : v > max ? max : v;
+            }
+
             /// <returns>Has changed in C-Step</returns>
             bool CStep()
             {
-                printElapsedTime("CStep");
+                try
+                {
+                    printElapsedTime("CStep");
 
-                // TODO
+                    // Spatial constraints
+                    var mAve = new Vec2[wo * ho];
+                    for (int ky = 0; ky < ho; ky++)
+                    {
+                        for (int kx = 0; kx < wo; kx++)
+                        {
+                            int k = kx + ky * wo;
+                            mAve[k] = new Vec2(0, 0);
+                            int cnt = 0;
+                            if (0 <= kx - 1 && 0 <= ky - 1)
+                            {
+                                mAve[k].x += m[(kx - 1) + (ky - 1) * wo].x;
+                                mAve[k].y += m[(kx - 1) + (ky - 1) * wo].y;
+                                cnt++;
+                            }
+                            if (0 <= kx - 1 && ky + 1 < ho)
+                            {
+                                mAve[k].x += m[(kx - 1) + (ky + 1) * wo].x;
+                                mAve[k].y += m[(kx - 1) + (ky + 1) * wo].y;
+                                cnt++;
+                            }
+                            if (kx + 1 < wo && 0 <= ky - 1)
+                            {
+                                mAve[k].x += m[(kx + 1) + (ky - 1) * wo].x;
+                                mAve[k].y += m[(kx + 1) + (ky - 1) * wo].y;
+                                cnt++;
+                            }
+                            if (kx + 1 < wo && ky + 1 < ho)
+                            {
+                                mAve[k].x += m[(kx + 1) + (ky + 1) * wo].x;
+                                mAve[k].y += m[(kx + 1) + (ky + 1) * wo].y;
+                                cnt++;
+                            }
+                            mAve[k].x /= cnt;
+                            mAve[k].y /= cnt;
+                        }
+                    }
+                    for (int ky = 0; ky < ho; ky++)
+                    {
+                        for (int kx = 0; kx < wo; kx++)
+                        {
+                            int k = kx + ky * wo;
+                            m[k].x = 0.5 * (m[k].x + mAve[k].x);
+                            m[k].y = 0.5 * (m[k].y + mAve[k].y);
+                            double x0 = rx * (kx + 0.5) - rx / 4;
+                            double x1 = rx * (kx + 0.5) + rx / 4;
+                            double y0 = ry * (ky + 0.5) - ry / 4;
+                            double y1 = ry * (ky + 0.5) + ry / 4;
+                            m[k].x = clamp(m[k].x, x0, x1);
+                            m[k].y = clamp(m[k].y, y0, y1);
+                        }
+                    }
+
+                    // Constrain spatial variance
+                    for (int k = 0; k < ho * wo; k++)
+                    {
+                        Mat2x2 _U, _S, _Vt;
+                        S[k].SVD(out _U, out _S, out _Vt);
+                        _S.m11 = clamp(_S.m11, 0.05, 0.1);
+                        _S.m22 = clamp(_S.m22, 0.05, 0.1);
+                        S[k] = _U * _S * _Vt;
+
+                        System.Diagnostics.Debug.Assert(double.IsNaN(S[k].m11) == false);
+                    }
+
+                    // Shape constraints
+
+                    // TODO
+
+
+
+
+
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex);
+                }
 
                 return true;
             }
+
             int iteration = 0;
 
             public unsafe Bitmap Downscale(Bitmap input, Size newSize)
@@ -610,7 +743,7 @@ namespace downscaling_winform
                     bool changedInMStep = MStep();
                     bool changedInCStep = CStep();
 
-                    if (iteration % 100 == 0)
+                    if (iteration % 10 == 0)
                     {
                         saveKernel(input);
                     }
