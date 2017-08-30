@@ -1,4 +1,5 @@
 ﻿//#define ENABLE_MULTITHREADING
+#define PERFORMANCE_MEASURE
 
 using System;
 using System.Collections.Generic;
@@ -16,13 +17,30 @@ namespace downscaling_winform
     public partial class Form1 : Form
     {
         // Content-Adaptive Downscaling [Koph, et al., SIGGRAPH Asia 2013]
-        class ContentAdaptiveDownscale
+        public class ContentAdaptiveDownscale
         {
-            class Vec2
+#if PERFORMANCE_MEASURE
+            const bool MeasurePerformance = true;
+#else
+            const bool PerformanceMeasure = false;
+#endif
+
+            public class Vec2
             {
                 public double x;
                 public double y;
                 public Vec2(double x, double y) { this.x = x; this.y = y; }
+
+                public static Vec2 operator +(Vec2 v1, Vec2 v2)
+                {
+                    return new Vec2(v1.x + v2.x, v1.y + v2.y);
+                }
+
+                public static Vec2 operator *(double value, Vec2 v2)
+                {
+                    return new Vec2(value + v2.x, value + v2.y);
+                }
+
                 public static Vec2 operator *(Vec2 v, Mat2x2 m)
                 {
                     return new Vec2(v.x * m.m11 + v.y * m.m21, v.x * m.m12 + v.y * m.m22);
@@ -42,13 +60,18 @@ namespace downscaling_winform
                     double len = Math.Sqrt(lenSqr);
                     return new Vec2(x / len, y / len);
                 }
+                public static Vec2 operator /(Vec2 v, double value)
+                {
+                    return new Vec2(v.x / value, v.y / value);
+                }
             }
-            class Vec3
+            public class Vec3
             {
                 public double x;
                 public double y;
                 public double z;
                 public Vec3(double x, double y, double z) { this.x = x; this.y = y; this.z = z; }
+
                 public static double DistanceSqr(Vec3 v1, Vec3 v2)
                 {
                     double dx = v1.x - v2.x;
@@ -56,13 +79,56 @@ namespace downscaling_winform
                     double dz = v1.z - v2.z;
                     return dx * dx + dy * dy + dz * dz;
                 }
+                public static Vec3 operator +(Vec3 v1, Vec3 v2)
+                {
+                    return new Vec3(v1.x + v2.x, v1.y + v2.y, v1.z + v2.z);
+                }
+                public static Vec3 operator *(double value, Vec3 v2)
+                {
+                    return new Vec3(value + v2.x, value + v2.y, value + v2.z);
+                }
+                public static Vec3 operator /(Vec3 v, double value)
+                {
+                    return new Vec3(v.x / value, v.y / value, v.z / value);
+                }
+
             }
-            class Mat2x2
+            public class Mat2x2
             {
                 // [m11, m12]
                 // [m21, m22]
 
                 public double m11, m12, m21, m22;
+
+                public static Mat2x2 FromVecVec(Vec2 v1, Vec2 v2)
+                {
+                    return new Mat2x2(
+                        v1.x * v2.x,
+                        v1.x * v2.y,
+                        v1.y * v2.x,
+                        v1.y * v2.y);
+                }
+
+                public static Mat2x2 operator *(Mat2x2 mat1, double value)
+                {
+                    return new Mat2x2(mat1.m11 * value, mat1.m12 * value, mat1.m21 * value, mat1.m22 * value);
+                }
+                public static Mat2x2 operator *(double value, Mat2x2 mat1)
+                {
+                    return mat1 * value;
+                }
+                public static Mat2x2 operator +(Mat2x2 mat1, Mat2x2 mat2)
+                {
+                    return new Mat2x2(
+                        mat1.m11 + mat2.m11,
+                        mat1.m12 + mat2.m12,
+                        mat1.m21 + mat2.m21,
+                        mat1.m22 + mat2.m22);
+                }
+                public static Mat2x2 operator /(Mat2x2 mat1, double value)
+                {
+                    return new Mat2x2(mat1.m11 / value, mat1.m12 / value, mat1.m21 / value, mat1.m22 / value);
+                }
 
                 public static Mat2x2 operator *(Mat2x2 mat1, Mat2x2 mat2)
                 {
@@ -84,8 +150,9 @@ namespace downscaling_winform
                 public Mat2x2 Inverse()
                 {
                     double d = m11 * m22 - m12 * m21;
-                    if (Math.Abs(d) <= 1e-8)
+                    if (Math.Abs(d) < epsilon)
                     {
+                        // Console.WriteLine("|d| = " + Math.Abs(d));
                         return new Mat2x2(0, 0, 0, 0);
                     }
                     double invd = 1.0 / d;
@@ -123,7 +190,7 @@ namespace downscaling_winform
                     double s22 = (a * st - c * ct) * sp + (-b * st + d * ct) * cp;
                     double sign_s11 = Math.Sign(s11);
                     double sign_s22 = Math.Sign(s22);
-                    System.Diagnostics.Debug.Assert(sign_s11 == 1.0 || sign_s11 == -1.0);
+//                    System.Diagnostics.Debug.Assert(sign_s11 == 1.0 || sign_s11 == -1.0);
                     Vt = new Mat2x2(sign_s11 * cp, sign_s11 * sp, -sign_s22 * sp, sign_s22 * cp);
                 }
             }
@@ -141,7 +208,7 @@ namespace downscaling_winform
             double[] g;
             int Rsize = 0;
 
-            unsafe Bitmap kernel2bmp(bool normal)
+            public unsafe Bitmap kernel2bmp(bool normal)
             {
                 var a = normal ? g : w;
 
@@ -153,57 +220,40 @@ namespace downscaling_winform
                     {
                         for (int kx = 0; kx < wo; kx++)
                         {
-                            int k = kx + wo * ky;
-                            double cx = rx * (kx + 0.5);
-                            double cy = ry * (ky + 0.5);
-                            int rx0 = Math.Max((int)(cx - 2 * rx), 0);
-                            int rx1 = Math.Min((int)(cx + 2 * rx), wi - 1);
-                            int ry0 = Math.Max((int)(cy - 2 * ry), 0);
-                            int ry1 = Math.Min((int)(cy + 2 * ry), hi - 1);
-                            double max = double.MinValue;
-                            double min = double.MaxValue;
-                            for (int iy = ry0; iy <= ry1; iy++)
+                            var set = KR(kx, ky);
+                            int mx = (int)m[set.k].x;
+                            int my = (int)m[set.k].y;
+                            for (int dy = (int)(-2 * ry); dy <= (int)(2 * ry); dy++)
                             {
-                                for (int ix = rx0; ix <= rx1; ix++)
+                                for (int dx = (int)(-2 * rx); dx <= (int)(2 * rx); dx++)
                                 {
-                                    System.Diagnostics.Debug.Assert(kidx(kx, ky, ix, iy) >= 0);
-
-                                    double d = a[kidx(kx, ky, ix, iy)];
-                                    max = Math.Max(max, Math.Log10(d));
-                                    min = Math.Min(min, Math.Log10(d));
-                                    if (double.IsNegativeInfinity(min))
+                                    int px = mx + kx;
+                                    int py = my + ky;
+                                    if (px < 0 || wi <= px || py < 0 || hi <= py)
                                     {
-                                        min = double.MinValue;
+                                        continue;
                                     }
-                                }
-                            }
-                            if (max == min)
-                            {
-                                max = min + 1.0;
-                            }
-                            for (int iy = ry0; iy <= ry1; iy++)
-                            {
-                                for (int ix = rx0; ix <= rx1; ix++)
-                                {
-                                    int ox = (int)(m[k].x - 2 * rx) + ix - (int)(cx - 2 * rx);
-                                    int oy = (int)(m[k].y - 2 * ry) + iy - (int)(cy - 2 * ry);
-
-                                    double d = a[kidx(kx, ky, ix, iy)];
-                                    double n = (Math.Log10(d) - min) / (max - min);
+                                    int kid = kidx(kx, ky, (int)set.cx + dx, (int)set.cy + dy);
+                                    if (kid < 0)
+                                    {
+                                        continue;
+                                    }
+                                    double d = a[kid];
+                                    double n = Math.Pow(0.1, d);
                                     byte value = (byte)(n * 255.0);
                                     if ((kx + ky) % 2 == 0)
                                     {
-                                        data[4 * ox + oy * it.Stride + 0] = value;
-                                        data[4 * ox + oy * it.Stride + 1] = 0;
-                                        data[4 * ox + oy * it.Stride + 2] = value;
-                                        data[4 * ox + oy * it.Stride + 3] = 255;
+                                        data[4 * px + py * it.Stride + 0] += value;
+                                        data[4 * px + py * it.Stride + 1] = 0;
+                                        data[4 * px + py * it.Stride + 2] += value;
+                                        data[4 * px + py * it.Stride + 3] = 255;
                                     }
                                     else
                                     {
-                                        data[4 * ox + oy * it.Stride + 0] = 0;
-                                        data[4 * ox + oy * it.Stride + 1] = value;
-                                        data[4 * ox + oy * it.Stride + 2] = 0;
-                                        data[4 * ox + oy * it.Stride + 3] = 255;
+                                        data[4 * px + py * it.Stride + 0] = 0;
+                                        data[4 * px + py * it.Stride + 1] += value;
+                                        data[4 * px + py * it.Stride + 2] = 0;
+                                        data[4 * px + py * it.Stride + 3] = 255;
                                     }
                                 }
                             }
@@ -213,7 +263,29 @@ namespace downscaling_winform
                 return bmp;
             }
 
-            unsafe Bitmap filter(Bitmap input)
+            class KernelRegion
+            {
+                public int k, kx, ky, rx0, rx1, ry0, ry1;
+                public double cx, cy;                    
+            }
+
+            KernelRegion KR(int kx, int ky)
+            {
+                double cx = rx * (kx + 0.5);
+                double cy = ry * (ky + 0.5);
+                return new KernelRegion()
+                {
+                    k = kx + wo * ky,
+                    cx = cx,
+                    cy = cy,
+                    rx0 = Math.Max((int)(cx - 2 * rx), 0),
+                    rx1 = Math.Min((int)(cx + 2 * rx), wi - 1),
+                    ry0 = Math.Max((int)(cy - 2 * ry), 0),
+                    ry1 = Math.Min((int)(cy + 2 * ry), hi - 1),
+                };
+            }
+
+            public unsafe Bitmap filter(Bitmap input)
             {
                 var a = g;
 
@@ -227,36 +299,46 @@ namespace downscaling_winform
                     {
                         for (int kx = 0; kx < wo; kx++)
                         {
-                            int k = kx + wo * ky;
-                            double cx = rx * (kx + 0.5);
-                            double cy = ry * (ky + 0.5);
-                            int rx0 = Math.Max((int)(cx - 2 * rx), 0);
-                            int rx1 = Math.Min((int)(cx + 2 * rx), wi - 1);
-                            int ry0 = Math.Max((int)(cy - 2 * ry), 0);
-                            int ry1 = Math.Min((int)(cy + 2 * ry), hi - 1);
+                            var kreg = KR(kx, ky);
+                            var set = KR(kx, ky);
+                            int mx = (int)m[set.k].x;
+                            int my = (int)m[set.k].y;
                             double r = 0.0;
                             double g = 0.0;
                             double b = 0.0;
                             double sum = 0;
-                            for (int iy = ry0; iy <= ry1; iy++)
+                            for (int dy = (int)(-2 * ry); dy <= (int)(2 * ry); dy++)
                             {
-                                for (int ix = rx0; ix <= rx1; ix++)
+                                for (int dx = (int)(-2 * rx); dx <= (int)(2 * rx); dx++)
                                 {
-                                    int ox = (int)(m[k].x - 2 * rx) + ix - (int)(cx - 2 * rx);
-                                    int oy = (int)(m[k].y - 2 * ry) + iy - (int)(cy - 2 * ry);
-
-
-                                    double d = a[kidx(kx, ky, ix, iy)];
+                                    int px = mx + kx;
+                                    int py = my + ky;
+                                    if (px < 0 || wi <= px || py < 0 || hi <= py)
+                                    {
+                                        continue;
+                                    }
+                                    int kid = kidx(kx, ky, (int)set.cx + dx, (int)set.cy + dy);
+                                    if (kid < 0)
+                                    {
+                                        continue;
+                                    }
+                                    double d = a[kid];
                                     sum += d;
-                                    r += d * (data_in[4 * ox + oy * it_in.Stride + 2] / 255.0);
-                                    g += d * (data_in[4 * ox + oy * it_in.Stride + 1] / 255.0);
-                                    b += d * (data_in[4 * ox + oy * it_in.Stride + 0] / 255.0);
+                                    r += d * (data_in[4 * px + py * it_in.Stride + 2] / 255.0);
+                                    g += d * (data_in[4 * px + py * it_in.Stride + 1] / 255.0);
+                                    b += d * (data_in[4 * px + py * it_in.Stride + 0] / 255.0);
                                 }
                             }
-                            r /= sum;
-                            g /= sum;
-                            b /= sum;
-
+                            if (sum <= 0)
+                            {
+                                r = g = b = 0;
+                            }
+                            else
+                            {
+                                r /= sum;
+                                g /= sum;
+                                b /= sum;
+                            }
                             data[4 * kx + ky * it.Stride + 2] = (byte)(255 * r);
                             data[4 * kx + ky * it.Stride + 1] = (byte)(255 * g);
                             data[4 * kx + ky * it.Stride + 0] = (byte)(255 * b);
@@ -302,14 +384,20 @@ namespace downscaling_winform
 
             void printElapsedTime(string prefix = "")
             {
-                Console.WriteLine($"[{stopwatchCnt}]{prefix}{stopwatch.ElapsedMilliseconds} ms.");
-                stopwatchCnt++;
+                if (MeasurePerformance)
+                {
+                    Console.WriteLine($"[{stopwatchCnt}]{prefix}{stopwatch.ElapsedMilliseconds} ms.");
+                    stopwatchCnt++;
+                }
             }
 
-            unsafe void initialize(Bitmap input, Bitmap output)
+            public unsafe void initialize(Bitmap input, Bitmap output)
             {
-                stopwatch = System.Diagnostics.Stopwatch.StartNew();
-                stopwatchCnt = 0;
+                if (MeasurePerformance)
+                {
+                    stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                    stopwatchCnt = 0;
+                }
                 
                 wi = input.Width;
                 hi = input.Height;
@@ -329,11 +417,10 @@ namespace downscaling_winform
                         m[k] = new Vec2(rx * (kx + 0.5), ry * (ky + 0.5));
                         S[k] = new Mat2x2(rx / 3, 0, 0, ry / 3);
                         v[k] = new Vec3(0.5, 0.5, 0.5);
-                        s[k] = 1e-4 * wi; // * wiしないと小さくなりすぎる？
+                        s[k] = 1e-4 * wi * hi; // * wiしないと小さくなりすぎる？
                         k++;
                     }
-                }
-                
+                }                
 
                 c = new Vec3[wi * hi];
                 using (var i_it = new FLib.BitmapIterator(input, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb))
@@ -355,60 +442,76 @@ namespace downscaling_winform
                     }
                 }
                 
-
                 // NOTE: (wo * ho) * (wi * hi) happened out of memory error.
-                // We should save only the region Rk for each kernel k.
+                //       We should save only the region R_k for each kernel k.
                 Rsize = (int)(4 * rx + 1) * (int)(4 * ry + 1);
                 w = new double[Rsize * wo * ho];
                 g = new double[Rsize * wo * ho];
 
-
-                for (int ky = 0; ky < ho; ky++)
-                {
-                    for (int kx = 0; kx < wo; kx++)
-                    {
-                        double cx = m[kx + ky * wo].x;
-                        double cy = m[kx + ky * wo].y;
-                        int rx0 = Math.Max((int)(cx - 2 * rx), 0);
-                        int rx1 = Math.Min((int)(cx + 2 * rx), wi - 1);
-                        int ry0 = Math.Max((int)(cy - 2 * ry), 0);
-                        int ry1 = Math.Min((int)(cy + 2 * ry), hi - 1);
-                        for (int iy = ry0; iy <= ry1; iy++)
-                        {
-                            for (int ix = rx0; ix <= rx1; ix++)
-                            {
-                                w[kidx(kx, ky, ix, iy)] = 1.0 / Rsize;
-                                g[kidx(kx, ky, ix, iy)] = 0.5 / Rsize;
-                            }
-                        }
-                    }
-                }
-
-
-
-
-                Console.WriteLine("[Content-Adaptive] initialize()");
-                
+                Console.WriteLine("[Content-Adaptive] initialize()");                
             }
 
             // get index with the value is wk[i] (or gk[i] in pseude code.
-            int kidx(int kx, int ky, int ix, int iy)
+            public int kidx(int kx, int ky, int ix, int iy)
             {
+                if (!(0 <= kx && kx <= wo && 0 <= ky && ky <= ho))
+                    return -1;
+                if (!(0 <= iy && ix <= wi && 0 <= iy && iy <= hi))
+                    return -1;
                 double cx = (kx + 0.5) * rx;
                 double cy = (ky + 0.5) * ry;
-                int rx0 = Math.Max((int)(cx - 2 * rx), 0);
-                int rx1 = Math.Min((int)(cx + 2 * rx), wi - 1);
-                int ry0 = Math.Max((int)(cy - 2 * ry), 0);
-                int ry1 = Math.Min((int)(cy + 2 * ry), hi - 1);
-                int x = ix - rx0;
-                int y = iy - ry0;
+                int xmin = (int)(cx - 2 * rx);
+                int xmax = (int)(cx + 2 * rx);
+                int ymin = (int)(cy - 2 * ry);
+                int ymax = (int)(cy + 2 * ry);
+                int x = ix - xmin;
+                int y = iy - ymin;
                 if (0 <= x && x < 4 * rx + 1 && 0 <= y && y < 4 * ry + 1)
                 {
                     int offset = (kx + ky * wo) * Rsize;
-                    int idx = x + y * (rx1 - rx0 + 1) + offset;
+                    int idx = x + y * (xmax - xmin + 1) + offset;
                     return idx;
                 }
                 return -1;
+            }
+
+            double sumInKernel(double[] array, int kx, int ky)
+            {
+                var kreg = KR(kx, ky);
+                double wsum = 0.0;
+                for (int iy = kreg.ry0; iy <= kreg.ry1; iy++)
+                {
+                    for (int ix = kreg.rx0; ix <= kreg.rx1; ix++)
+                    {
+                        wsum += array[kidx(kx, ky, ix, iy)];
+                    }
+                }
+                return wsum;
+            }
+            void divInKernel(double[] array, double value, int kx, int ky)
+            {
+                var kreg = KR(kx, ky);
+                if (Math.Abs(value) < epsilon)
+                {
+                    Console.WriteLine("|value| = " + Math.Abs(value));
+                    for (int iy = kreg.ry0; iy <= kreg.ry1; iy++)
+                    {
+                        for (int ix = kreg.rx0; ix <= kreg.rx1; ix++)
+                        {
+                            array[kidx(kx, ky, ix, iy)] = 0.0;
+                        }
+                    }
+                }
+                else
+                {
+                    for (int iy = kreg.ry0; iy <= kreg.ry1; iy++)
+                    {
+                        for (int ix = kreg.rx0; ix <= kreg.rx1; ix++)
+                        {
+                            array[kidx(kx, ky, ix, iy)] /= value;
+                        }
+                    }
+                }
             }
 
             void EStep()
@@ -430,49 +533,31 @@ namespace downscaling_winform
                 {
                     for (int kx = 0; kx < wo; kx++)
                     {
-                        int k = kx + wo * ky;
-                        double cx = (kx + 0.5) * rx;
-                        double cy = (ky + 0.5) * ry;
-                        int rx0 = Math.Max((int)(cx - 2 * rx), 0);
-                        int rx1 = Math.Min((int)(cx + 2 * rx), wi - 1);
-                        int ry0 = Math.Max((int)(cy - 2 * ry), 0);
-                        int ry1 = Math.Min((int)(cy + 2 * ry), hi - 1);
-                        for (int iy = ry0; iy <= ry1; iy++)
+                        var kreg = KR(kx, ky);
+                        for (int iy = kreg.ry0; iy <= kreg.ry1; iy++)
                         {
-                            for (int ix = rx0; ix <= rx1; ix++)
+                            for (int ix = kreg.rx0; ix <= kreg.rx1; ix++)
                             {
                                 int i = ix + iy * wi;
-                                var pi_uk = new Vec2(ix - m[k].x, iy - m[k].y);
-                                var Skinv = S[k].Inverse();
-                                double d = -0.5 * (pi_uk * Skinv * pi_uk) - Vec3.DistanceSqr(c[i], v[k]) / (2 * s[k] * s[k]);
+                                var pi_uk = new Vec2(ix - m[kreg.k].x, iy - m[kreg.k].y);
+                                var Skinv = S[kreg.k].Inverse();
+                                double d = -0.5 * (pi_uk * Skinv * pi_uk) - Vec3.DistanceSqr(c[i], v[kreg.k]) / (2 * s[kreg.k] * s[kreg.k]);
 
                                 // 微妙？
+                                // TODO
                                 d = Math.Min(d, 700);
 
                                 w[kidx(kx, ky, ix, iy)] = Math.Exp(d);
+                                System.Diagnostics.Debug.Assert(false == double.IsNaN(w[kidx(kx, ky, ix, iy)]));
+                                System.Diagnostics.Debug.Assert(false == double.IsInfinity(w[kidx(kx, ky, ix, iy)]));
 
                                 // save i -> k
                                 i2k[i].Add(kx);
                                 i2k[i].Add(ky);
                             }
                         }
-                        double wsum = 0.0;
-                        for (int iy = ry0; iy <= ry1; iy++)
-                        {
-                            for (int ix = rx0; ix <= rx1; ix++)
-                            {
-                                int i = ix + iy * wi;
-                                wsum += w[kidx(kx, ky, ix, iy)];
-                            }
-                        }
-                        for (int iy = ry0; iy <= ry1; iy++)
-                        {
-                            for (int ix = rx0; ix <= rx1; ix++)
-                            {
-                                int i = ix + iy * wi;
-                                w[kidx(kx, ky, ix, iy)] /= wsum;
-                            }
-                        }
+                        double wsum = sumInKernel(w, kx, ky);
+                        divInKernel(w, wsum, kx, ky);
                     }
                 }
 #if ENABLE_MULTITHREADING
@@ -515,6 +600,7 @@ namespace downscaling_winform
                                 int ky = i2ki[j + 1];
                                 var ki = kidx(kx, ky, ix, iy);
                                 g[ki] = w[ki] / wsum; // bottle neck!
+                                System.Diagnostics.Debug.Assert(false == double.IsNaN(g[ki]));
                             }
                         }
                     }
@@ -523,12 +609,10 @@ namespace downscaling_winform
                 );
 #endif
             }
-
+            const double epsilon = 1e-102;
             /// <returns>Has changed in M-Step</returns>
             bool MStep()
             {
-                double diff = 0.0;
-
                 // compute all kernels
 #if ENABLE_MULTITHREADING
                 System.Threading.Tasks.Parallel.For(0, ho, (ky) =>
@@ -538,94 +622,61 @@ namespace downscaling_winform
                 {
                     for (int kx = 0; kx < wo; kx++)
                     {
-                        int k = kx + wo * ky;
-                        double cx = (kx + 0.5) * rx;
-                        double cy = (ky + 0.5) * ry;
-                        int rx0 = Math.Max((int)(cx - 2 * rx), 0);
-                        int rx1 = Math.Min((int)(cx + 2 * rx), wi - 1);
-                        int ry0 = Math.Max((int)(cy - 2 * ry), 0);
-                        int ry1 = Math.Min((int)(cy + 2 * ry), hi - 1);
-                        double wsum = 0.0;
-                        for (int iy = ry0; iy <= ry1; iy++)
+                        var set = KR(kx, ky);
+                        double gsum = sumInKernel(g, kx, ky);
+
+                        var mk = m[set.k];
+                        S[set.k] = new Mat2x2(0, 0, 0, 0);
+                        for (int iy = set.ry0; iy <= set.ry1; iy++)
                         {
-                            for (int ix = rx0; ix <= rx1; ix++)
+                            for (int ix = set.rx0; ix <= set.rx1; ix++)
                             {
-                                int i = ix + iy * wi;
-                                wsum += g[kidx(kx, ky, ix, iy)];
+                                double gki = g[kidx(kx, ky, ix, iy)];
+                                var d = new Vec2(ix - mk.x, iy - mk.y);
+                                S[set.k] += gki *  Mat2x2.FromVecVec(d, d);
+                                System.Diagnostics.Debug.Assert(false == double.IsNaN(S[set.k].m11));
                             }
                         }
-
-                        var mk = m[k];
-                        S[k] = new Mat2x2(0, 0, 0, 0);
-                        m[k] = new Vec2(0, 0);
-                        v[k] = new Vec3(0, 0, 0);
-                        for (int iy = ry0; iy <= ry1; iy++)
+                        if (Math.Abs(gsum) > epsilon)
                         {
-                            for (int ix = rx0; ix <= rx1; ix++)
+                            S[set.k] /= gsum;
+                        }
+                        else
+                        {
+                            Console.WriteLine("|gsum| = " + Math.Abs(gsum));
+                        }
+                        System.Diagnostics.Debug.Assert(false == double.IsNaN(S[set.k].m11));
+
+                        m[set.k] = new Vec2(0, 0);
+                        for (int iy = set.ry0; iy <= set.ry1; iy++)
+                        {
+                            for (int ix = set.rx0; ix <= set.rx1; ix++)
+                            {
+                                double gki = g[kidx(kx, ky, ix, iy)];
+                                m[set.k] += gki * new Vec2(ix, iy);
+                            }
+                        }
+                        if (Math.Abs(gsum) > epsilon)
+                            m[set.k] /= gsum;
+
+                        v[set.k] = new Vec3(0, 0, 0);
+                        for (int iy = set.ry0; iy <= set.ry1; iy++)
+                        {
+                            for (int ix = set.rx0; ix <= set.rx1; ix++)
                             {
                                 double gki = g[kidx(kx, ky, ix, iy)];
                                 int i = ix + iy * wi;
-                                double dx = ix - mk.x;
-                                double dy = iy - mk.y;
-                                S[k].m11 += gki * dx * dx;
-                                S[k].m12 += gki * dx * dy;
-                                S[k].m21 += gki * dy * dx;
-                                S[k].m22 += gki * dy * dy;
+                                v[set.k] += gki * c[i];
                             }
                         }
-                        S[k].m11 /= wsum;
-                        S[k].m12 /= wsum;
-                        S[k].m21 /= wsum;
-                        S[k].m22 /= wsum;
-
-                        for (int iy = ry0; iy <= ry1; iy++)
-                        {
-                            for (int ix = rx0; ix <= rx1; ix++)
-                            {
-                                double gki = g[kidx(kx, ky, ix, iy)];
-                                int i = ix + iy * wi;
-                                m[k].x += gki * ix;
-                                m[k].y += gki * iy;
-                            }
-                        }
-                        m[k].x /= wsum;
-                        m[k].y /= wsum;
-
-
-                        var prevX = v[k].x;
-                        var prevY = v[k].y;
-                        var prevZ = v[k].z;
-                        for (int iy = ry0; iy <= ry1; iy++)
-                        {
-                            for (int ix = rx0; ix <= rx1; ix++)
-                            {
-                                double gki = g[kidx(kx, ky, ix, iy)];
-                                int i = ix + iy * wi;
-                                v[k].x += gki * c[i].x;
-                                v[k].y += gki * c[i].y;
-                                v[k].z += gki * c[i].z;
-                            }
-                        }
-                        v[k].x /= wsum;
-                        v[k].y /= wsum;
-                        v[k].z /= wsum;
-
-                        double diffx = prevX - v[k].x;
-                        double diffy = prevY - v[k].y;
-                        double diffz = prevZ - v[k].z;
-                        diff += diffx * diffx + diffy * diffy + diffz * diffz;
-
-                        System.Diagnostics.Debug.Assert(double.IsNaN(diff) == false);
+                        if (Math.Abs(gsum) > epsilon)
+                            v[set.k] /= gsum;
                     }
                 }
 #if ENABLE_MULTITHREADING
                 );
 #endif
-
-                diff /= wo * ho;
-                Console.WriteLine($"diff = {diff} (iter = {iteration})");
-
-                return diff >= 0.05;
+                return true;
             }
 
             double clamp(double v, double min, double max)
@@ -649,30 +700,25 @@ namespace downscaling_winform
                             int cnt = 0;
                             if (0 <= kx - 1 && 0 <= ky - 1)
                             {
-                                mAve[k].x += m[(kx - 1) + (ky - 1) * wo].x;
-                                mAve[k].y += m[(kx - 1) + (ky - 1) * wo].y;
+                                mAve[k] += m[(kx - 1) + (ky - 1) * wo];
                                 cnt++;
                             }
                             if (0 <= kx - 1 && ky + 1 < ho)
                             {
-                                mAve[k].x += m[(kx - 1) + (ky + 1) * wo].x;
-                                mAve[k].y += m[(kx - 1) + (ky + 1) * wo].y;
+                                mAve[k] += m[(kx - 1) + (ky + 1) * wo];
                                 cnt++;
                             }
                             if (kx + 1 < wo && 0 <= ky - 1)
                             {
-                                mAve[k].x += m[(kx + 1) + (ky - 1) * wo].x;
-                                mAve[k].y += m[(kx + 1) + (ky - 1) * wo].y;
+                                mAve[k] += m[(kx + 1) + (ky - 1) * wo];
                                 cnt++;
                             }
                             if (kx + 1 < wo && ky + 1 < ho)
                             {
-                                mAve[k].x += m[(kx + 1) + (ky + 1) * wo].x;
-                                mAve[k].y += m[(kx + 1) + (ky + 1) * wo].y;
+                                mAve[k] += m[(kx + 1) + (ky + 1) * wo];
                                 cnt++;
                             }
-                            mAve[k].x /= cnt;
-                            mAve[k].y /= cnt;
+                            mAve[k] /= cnt;
                         }
                     }
                     for (int ky = 0; ky < ho; ky++)
@@ -680,8 +726,7 @@ namespace downscaling_winform
                         for (int kx = 0; kx < wo; kx++)
                         {
                             int k = kx + ky * wo;
-                            m[k].x = 0.5 * (m[k].x + mAve[k].x);
-                            m[k].y = 0.5 * (m[k].y + mAve[k].y);
+                            m[k] = 0.5 * (m[k] + mAve[k]);
                             double x0 = rx * (kx + 0.5) - rx / 4;
                             double x1 = rx * (kx + 0.5) + rx / 4;
                             double y0 = ry * (ky + 0.5) - ry / 4;
@@ -709,15 +754,7 @@ namespace downscaling_winform
                     {
                         for (int kx = 0; kx < wo; kx++)
                         {
-                            double cx = (kx + 0.5) * rx;
-                            double cy = (ky + 0.5) * ry;
-                            int rx0 = Math.Max((int)(cx - 2 * rx), 0);
-                            int rx1 = Math.Min((int)(cx + 2 * rx), wi - 1);
-                            int ry0 = Math.Max((int)(cy - 2 * ry), 0);
-                            int ry1 = Math.Min((int)(cy + 2 * ry), hi - 1);
-
-                            int k = kx + ky * wo;
-
+                            var set = KR(kx, ky);
                             for (int ny = ky - 1; ny <= ky + 1; ny++)
                             {
                                 for (int nx = kx - 1; nx <= kx + 1; nx++)
@@ -736,28 +773,28 @@ namespace downscaling_winform
                                     var d = new Vec2(nx - kx, ny - ky);
 
                                     double _s = 0;
-                                    for (int iy = ry0; iy <= ry1; iy++)
+                                    for (int iy = set.ry0; iy <= set.ry1; iy++)
                                     {
-                                        for (int ix = rx0; ix <= rx1; ix++)
+                                        for (int ix = set.rx0; ix <= set.rx1; ix++)
                                         {
                                             int i = ix + iy * wi;
 
-                                            double dpmx = ix - m[k].x;
-                                            double dpmy = iy - m[k].y;
+                                            double dpmx = ix - m[set.k].x;
+                                            double dpmy = iy - m[set.k].y;
                                             double val = Math.Max(0, dpmx * d.x + dpmy * d.y);
                                             _s += g[kidx(kx, ky, ix, iy)] * val * val;
                                         }
                                     }
 
                                     double _f = 0.0;
-                                    for (int iy = ry0; iy <= ry1; iy++)
+                                    for (int iy = set.ry0; iy <= set.ry1; iy++)
                                     {
-                                        for (int ix = rx0; ix <= rx1; ix++)
+                                        for (int ix = set.rx0; ix <= set.rx1; ix++)
                                         {
                                             int i = ix + iy * wi;
 
-                                            double dpmx = ix - m[k].x;
-                                            double dpmy = iy - m[k].y;
+                                            double dpmx = ix - m[set.k].x;
+                                            double dpmy = iy - m[set.k].y;
                                             double val = Math.Max(0, dpmx * d.x + dpmy * d.y);
                                             int nidx = kidx(nx, ny, ix, iy);
                                             _f += g[kidx(kx, ky, ix, iy)] * (nidx < 0 ? 0.0 : g[nidx]);
@@ -765,19 +802,19 @@ namespace downscaling_winform
                                     }
 
                                     var o = new Vec2(0, 0);
-                                    for (int iy = ry0 + 1; iy <= ry1; iy++)
+                                    for (int iy = set.ry0 + 1; iy <= set.ry1; iy++)
                                     {
-                                        for (int ix = rx0 + 1; ix <= rx1; ix++)
+                                        for (int ix = set.rx0 + 1; ix <= set.rx1; ix++)
                                         {
                                             int nidx01 = kidx(nx, ny, ix - 1, iy);
                                             double gndix01 = nidx01 < 0 ? 0.0 : g[nidx01];
                                             int nidx10 = kidx(nx, ny, ix, iy - 1);
-                                            double gndix10 = nidx10 < 0 ? 0.0 : g[nidx10];
+                                            double gnidx10 = nidx10 < 0 ? 0.0 : g[nidx10];
                                             int nidx11 = kidx(nx, ny, ix, iy);
-                                            double gndix11 = nidx11 < 0 ? 0.0 : g[nidx11];
+                                            double gnidx11 = nidx11 < 0 ? 0.0 : g[nidx11];
                                             double val01 = g[kidx(kx, ky, ix - 1, iy)] / (g[kidx(kx, ky, ix - 1, iy)] + gndix01);
-                                            double val10 = g[kidx(kx, ky, ix, iy - 1)] / (g[kidx(kx, ky, ix, iy - 1)] + gndix10);
-                                            double val11 = g[kidx(kx, ky, ix, iy)] / (g[kidx(kx, ky, ix, iy)] + gndix11);
+                                            double val10 = g[kidx(kx, ky, ix, iy - 1)] / (g[kidx(kx, ky, ix, iy - 1)] + gnidx10);
+                                            double val11 = g[kidx(kx, ky, ix, iy)] / (g[kidx(kx, ky, ix, iy)] + gnidx11);
                                             o.x += val11 - val01;
                                             o.y += val11 - val10;
                                         }
@@ -787,7 +824,7 @@ namespace downscaling_winform
 
                                     if (_s > 0.2 * rx || (_f < 0.08 && cos < Math.Cos(Math.PI * 25 / 180)))
                                     {
-                                        s[k] = 1.1 * s[k];
+                                        s[set.k] = 1.1 * s[set.k];
                                         s[n] = 1.1 * s[n];
                                     }
                                 }
