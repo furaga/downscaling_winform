@@ -22,7 +22,7 @@ namespace downscaling_winform
 #if PERFORMANCE_MEASURE
             const bool MeasurePerformance = true;
 #else
-            const bool PerformanceMeasure = false;
+            const bool MeasurePerformance = false;
 #endif
 
             public class Vec2
@@ -878,7 +878,7 @@ namespace downscaling_winform
 
         unsafe Bitmap contentAdaptive(Bitmap input, Size newSize)
         {
-            return new ContentAdaptiveDownscale().Downscale(input, newSize);
+            return new FLib.ContentBasedDownscaler().Downscale(input, newSize);
         }
 
 
