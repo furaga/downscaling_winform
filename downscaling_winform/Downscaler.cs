@@ -12,8 +12,35 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Drawing.Imaging;
 
+using Config = FLib.ContenteBaseDownscaleUtils.Config;
+using For= FLib.ContenteBaseDownscaleUtils.For;
+
 namespace FLib
 {
+    public class ContentBasedDownscale2
+    {
+        Vec2m[] m;
+        Mat2x2m[] S;
+        Vec3m[] v;
+        decimal[] s;
+        Vec3m[] c; // CIELAB, [0, 1]
+        decimal[] w;
+        decimal[] g;
+
+        internal void Intiailize(Config config_)
+        {
+            For.AllKernels(config_, (config, k) => {
+                m[k.index] = new Vec2m(k.x, k.y);
+                S[k.index] = new Mat2x2m(config.rx / 3m, 0, 0, config.ry / 3m);
+                v[k.index] = new Vec3m(0.5m, 0.5m, 0.5m);
+                s[k.index] = 1e-4m;
+            });
+        }
+
+        // TODO:
+    }
+
+
     public class ContentBasedDownscaler
     {
 #if PERFORMANCE_MEASURE
