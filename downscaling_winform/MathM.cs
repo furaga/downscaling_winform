@@ -13,6 +13,11 @@ namespace FLib
             return new Vec2m(v1.x + v2.x, v1.y + v2.y);
         }
 
+        public static Vec2m operator -(Vec2m v1, Vec2m v2)
+        {
+            return new Vec2m(v1.x - v2.x, v1.y - v2.y);
+        }
+
         public static Vec2m operator *(decimal value, Vec2m v2)
         {
             return new Vec2m(value + v2.x, value + v2.y);
@@ -61,6 +66,12 @@ namespace FLib
         public static Vec3m operator +(Vec3m v1, Vec3m v2)
         {
             return new Vec3m(v1.x + v2.x, v1.y + v2.y, v1.z + v2.z);
+        }
+
+
+        public static Vec3m operator -(Vec3m v1, Vec3m v2)
+        {
+            return new Vec3m(v1.x - v2.x, v1.y - v2.y, v1.z - v2.z);
         }
 
         public static Vec3m operator *(decimal value, Vec3m v2)

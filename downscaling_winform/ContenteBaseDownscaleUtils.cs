@@ -23,13 +23,12 @@ namespace FLib.ContenteBaseDownscaleUtils
 
     internal class Position
     {
-        public int x, y;
+        public Vec2m p;
         public int index;
         public void Set(Config config, int xi, int yi)
         {
-            this.x = xi;
-            this.y = yi;
-            this.index = x + y * config.wi;
+            this.p = new Vec2m(xi, yi);
+            this.index = xi + yi * config.wi;
         }
     }
 
@@ -57,6 +56,28 @@ namespace FLib.ContenteBaseDownscaleUtils
                     k.Set(config, x, y);
                     fnc(config, k);
                 }
+            }
+        }
+
+        static internal void AllInPixel(Config config, Action<Config, Position> fnc)
+        {
+            Position i = new Position();
+            for (int y = 0; y < config.hi; y++)
+            {
+                for (int x = 0; x < config.wi; x++)
+                {
+                    i.Set(config, x, y);
+                    fnc(config, i);
+                }
+            }
+        }
+
+        static internal void AllKernelForPixel(Config config, List<Kernel>[] i2k, Position i, Action<Config, Kernel> fnc)
+        {
+            var i2ki = i2k[i.index];
+            for (int j = 0; j < i2ki.Count; j += 2)
+            {
+                fnc(config, i2ki[j]);
             }
         }
 

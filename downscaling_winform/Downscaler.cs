@@ -13,7 +13,9 @@ using System.Windows.Forms;
 using System.Drawing.Imaging;
 
 using Config = FLib.ContenteBaseDownscaleUtils.Config;
-using For= FLib.ContenteBaseDownscaleUtils.For;
+using For = FLib.ContenteBaseDownscaleUtils.For;
+using Position = FLib.ContenteBaseDownscaleUtils.Position;
+using Kernel = FLib.ContenteBaseDownscaleUtils.Kernel;
 
 namespace FLib
 {
@@ -24,12 +26,26 @@ namespace FLib
         Vec3m[] v;
         decimal[] s;
         Vec3m[] c; // CIELAB, [0, 1]
-        decimal[] w;
-        decimal[] g;
-
-        internal void Intiailize(Config config_)
+        List<decimal[]> w_;
+        List<decimal[]> g_;
+        decimal[] w(Kernel k)
         {
-            For.AllKernels(config_, (config, k) => {
+            return w_[k.index];
+        }
+        decimal[] g(Kernel k)
+        {
+            return g_[k.index];
+        }
+
+        void intiailize(Config config)
+        {
+            int Rsize = (int)(4 * config.rx + 1) * (int)(4 * config.ry + 1);
+
+            w_ = new List<decimal[]>();
+            g_ = new List<decimal[]>();
+            For.AllKernels(config, (_, k) => {
+                w_.Add(new decimal[Rsize]);
+                g_.Add(new decimal[Rsize]);
                 m[k.index] = new Vec2m(k.x, k.y);
                 S[k.index] = new Mat2x2m(config.rx / 3m, 0, 0, config.ry / 3m);
                 v[k.index] = new Vec3m(0.5m, 0.5m, 0.5m);
@@ -37,7 +53,108 @@ namespace FLib
             });
         }
 
-        // TODO:
+        void eStep(Config config)
+        {
+            var i2k = new List<Kernel>[config.wi * config.hi];
+            for (int i = 0; i < i2k.Length; i++)
+            {
+                i2k[i] = new List<Kernel>();
+            }
+            decimal[] sum_w = new decimal[config.wi * config.hi];
+
+            For.AllKernels(config, (_, k) =>
+            {
+                decimal wsum = 0m;
+                For.AllInRegion(config, k, (_1, i) =>
+                {
+                    w(k)[i.index - k.index] = calcGaussian(k, i);
+                    wsum += w(k)[i.index - k.index];
+                    i2k[i.index].Add(k);;
+                });
+
+                For.AllInRegion(config, k, (_1, i) =>
+                {
+                    w(k)[i.index - k.index] /= wsum;
+                    sum_w[i.index - k.index] += w(k)[i.index - k.index];
+                });
+            });
+
+            For.AllInPixel(config, (_, i) =>
+            {
+                For.AllKernelForPixel(config, i2k, i, (_1, k) =>
+                {
+                    g(k)[i.index - k.index] = w(k)[i.index - k.index] / sum_w[i.index - k.index];
+                });
+            });
+        }
+
+        void mStep(Config config)
+        {
+            For.AllKernels(config, (_, k) =>
+            {
+                var gsum = sumInRegion(config, k, i => g(k)[i.index - k.index]);
+                S[k.index] = sumInRegion(config, k, i => g(k)[i.index - k.index] * Mat2x2m.FromVecVec(i.p - m[i.index], i.p - m[i.index]));
+                m[k.index] = sumInRegion(config, k, i => g(k)[i.index - k.index] * i.p);
+                v[k.index] = sumInRegion(config, k, i => g(k)[i.index - k.index] * c[i.index]);
+            });
+        }
+
+        void cStep(Config config)
+        {
+            // TODO:
+        }
+
+        decimal calcGaussian(Kernel k, Position i)
+        {
+            var dpos = i.p - m[i.index];
+            var invS = S[i.index].Inverse();
+            var posTerm = -0.5m * dpos * invS * dpos;
+            var dcol = c[i.index] - v[k.index];
+            var colTerm = -Vec3m.DistanceSqr(c[i.index], v[k.index]) / (2 * s[k.index] * s[k.index]);
+            var result = (decimal)Math.Exp((double)(posTerm + colTerm));
+            return result;
+        }
+
+        decimal sumInRegion(Config config, Kernel k, Func<Position, decimal> pos2val)
+        {
+            decimal result = 0m;
+            For.AllInRegion(config, k, (_, i) =>
+            {
+                result += pos2val(i);
+            });
+            return result;
+        }
+
+        Mat2x2m sumInRegion(Config config, Kernel k, Func<Position, Mat2x2m> pos2val)
+        {
+            var result = new Mat2x2m(0, 0, 0, 0);
+            For.AllInRegion(config, k, (_, i) =>
+            {
+                result += pos2val(i);
+            });
+            return result;
+        }
+
+        Vec2m sumInRegion(Config config, Kernel k, Func<Position, Vec2m> pos2val)
+        {
+            var result = new Vec2m(0, 0);
+            For.AllInRegion(config, k, (_, i) =>
+            {
+                result += pos2val(i);
+            });
+            return result;
+        }
+
+
+        Vec3m sumInRegion(Config config, Kernel k, Func<Position, Vec3m> pos2val)
+        {
+            var result = new Vec3m(0, 0, 0);
+            For.AllInRegion(config, k, (_, i) =>
+            {
+                result += pos2val(i);
+            });
+            return result;
+        }
     }
 
 
