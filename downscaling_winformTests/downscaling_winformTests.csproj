@@ -53,6 +53,7 @@
   </Choose>
   <ItemGroup>
     <Compile Include="ContentAdaptiveDownscaleTests.cs" />
+    <Compile Include="ForTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

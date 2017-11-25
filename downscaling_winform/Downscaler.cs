@@ -65,23 +65,23 @@ namespace FLib
             For.AllKernels(config, (_, k) =>
             {
                 decimal wsum = 0m;
-                For.AllInRegion(config, k, (_1, i) =>
+                For.AllPixeelsOfRegion(config, k, (_1, i) =>
                 {
                     w(k)[i.index - k.index] = calcGaussian(k, i);
                     wsum += w(k)[i.index - k.index];
                     i2k[i.index].Add(k);;
                 });
 
-                For.AllInRegion(config, k, (_1, i) =>
+                For.AllPixeelsOfRegion(config, k, (_1, i) =>
                 {
                     w(k)[i.index - k.index] /= wsum;
                     sum_w[i.index - k.index] += w(k)[i.index - k.index];
                 });
             });
 
-            For.AllInPixel(config, (_, i) =>
+            For.AllPixels(config, (_, i) =>
             {
-                For.AllKernelForPixel(config, i2k, i, (_1, k) =>
+                For.AllKernelOfPixel(config, i2k, i, (_1, k) =>
                 {
                     g(k)[i.index - k.index] = w(k)[i.index - k.index] / sum_w[i.index - k.index];
                 });
@@ -118,7 +118,7 @@ namespace FLib
         decimal sumInRegion(Config config, Kernel k, Func<Position, decimal> pos2val)
         {
             decimal result = 0m;
-            For.AllInRegion(config, k, (_, i) =>
+            For.AllPixeelsOfRegion(config, k, (_, i) =>
             {
                 result += pos2val(i);
             });
@@ -128,7 +128,7 @@ namespace FLib
         Mat2x2m sumInRegion(Config config, Kernel k, Func<Position, Mat2x2m> pos2val)
         {
             var result = new Mat2x2m(0, 0, 0, 0);
-            For.AllInRegion(config, k, (_, i) =>
+            For.AllPixeelsOfRegion(config, k, (_, i) =>
             {
                 result += pos2val(i);
             });
@@ -138,7 +138,7 @@ namespace FLib
         Vec2m sumInRegion(Config config, Kernel k, Func<Position, Vec2m> pos2val)
         {
             var result = new Vec2m(0, 0);
-            For.AllInRegion(config, k, (_, i) =>
+            For.AllPixeelsOfRegion(config, k, (_, i) =>
             {
                 result += pos2val(i);
             });
@@ -149,7 +149,7 @@ namespace FLib
         Vec3m sumInRegion(Config config, Kernel k, Func<Position, Vec3m> pos2val)
         {
             var result = new Vec3m(0, 0, 0);
-            For.AllInRegion(config, k, (_, i) =>
+            For.AllPixeelsOfRegion(config, k, (_, i) =>
             {
                 result += pos2val(i);
             });
