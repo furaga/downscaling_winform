@@ -47,6 +47,10 @@ namespace FLib.ContenteBaseDownscaleUtils
         public int x, y;
         public int index;
 
+        // min position of kernel
+        public int xi, yi;
+        public int indexi; 
+
         public Kernel()
         {
         }
@@ -60,14 +64,19 @@ namespace FLib.ContenteBaseDownscaleUtils
         {
             this.x = xo;
             this.y = yo;
-            this.index = x + y * config.wo;
+            this.index = xo + yo * config.wo;
+
+            this.xi = (int)((xo) * config.rx);
+            this.yi = (int)((yo) * config.ry);
+            this.indexi = xi + yi * config.wi;
         }
     }
 
     public class For
     {
-        static public void AllKernels(Config config, Action<Config, Kernel> fnc)
+        static public int AllKernels(Config config, Action<Config, Kernel> fnc)
         {
+            int counter = 0;
             Kernel k = new Kernel();
             for (int ky = 0; ky < config.ho; ky++)
             {
@@ -75,12 +84,15 @@ namespace FLib.ContenteBaseDownscaleUtils
                 {
                     k.Set(config, kx, ky);
                     fnc(config, k);
+                    counter++;
                 }
             }
+            return counter;
         }
 
-        static public void AllPixels(Config config, Action<Config, Position> fnc)
+        static public int AllPixels(Config config, Action<Config, Position> fnc)
         {
+            int counter = 0;
             Position i = new Position();
             for (int y = 0; y < config.hi; y++)
             {
@@ -88,38 +100,43 @@ namespace FLib.ContenteBaseDownscaleUtils
                 {
                     i.Set(config, x, y);
                     fnc(config, i);
+                    counter++;
                 }
             }
+            return counter;
         }
 
-        static public void AllKernelOfPixel(Config config, List<Kernel>[] i2k, Position i, Action<Config, Kernel> fnc)
+        static public int AllPixeelsOfRegion(Config config, Kernel k, Action<Config, Position> fnc)
         {
-            var i2ki = i2k[i.index];
-            for (int j = 0; j < i2ki.Count; j += 2)
-            {
-                fnc(config, i2ki[j]);
-            }
-        }
-
-        static public void AllPixeelsOfRegion(Config config, Kernel k, Action<Config, Position> fnc)
-        {
+            int counter = 0;
             int baseX = (int)((k.x + 0.5m) * config.rx);
             int baseY = (int)((k.y + 0.5m) * config.ry);
             Position i = new Position();
             for (int dy = (int)(-2 * config.ry + 1); dy <= (int)(2 * config.ry - 1); dy++)
             {
                 int y = baseY + dy;
+                if(y < 0 || config.hi <= y)
+                {
+                    continue;
+                }
                 for (int dx = (int)(-2 * config.rx + 1); dx <= (int)(2 * config.rx - 1); dx++)
                 {
                     int x = baseX + dx;
+                    if (x < 0 || config.wi <= x)
+                    {
+                        continue;
+                    }
                     i.Set(config, x, y);
                     fnc(config, i);
+                    counter++;
                 }
             }
+            return counter;
         }
 
-        static public void AllKernelOfPixel(Config config, Position i, Action<Config, Kernel> fnc)
+        static public int AllKernelOfPixel(Config config, Position i, Action<Config, Kernel> fnc)
         {
+            int counter = 0;
             var xo = (int)(i.p.x / config.rx);
             var yo = (int)(i.p.y / config.ry);
 
@@ -129,8 +146,16 @@ namespace FLib.ContenteBaseDownscaleUtils
             Kernel k = new Kernel();
             for (int ky = yo - 2; ky <= yo + 2; ky++)
             {
+                if (ky < 0 || config.ho <= ky)
+                {
+                    continue;
+                }
                 for (int kx = xo - 2; kx <= xo + 2; kx++)
                 {
+                    if (kx < 0 || config.wo <= kx)
+                    {
+                        continue;
+                    }
                     var x = (kx + 0.5m) * config.rx;
                     var y = (ky + 0.5m) * config.ry;
                     var dx = i.p.x - x;
@@ -139,9 +164,11 @@ namespace FLib.ContenteBaseDownscaleUtils
                     {
                         k.Set(config, kx, ky);
                         fnc(config, k);
+                        counter++;
                     }
                 }
             }
+            return counter;
         }
 
     }

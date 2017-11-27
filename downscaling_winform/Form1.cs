@@ -878,7 +878,7 @@ namespace downscaling_winform
 
         unsafe Bitmap contentAdaptive(Bitmap input, Size newSize)
         {
-            return new FLib.ContentBasedDownscaler().Downscale(input, newSize);
+            return new FLib.ContentBasedDownscale2().Downscale(input, newSize);
         }
 
 
