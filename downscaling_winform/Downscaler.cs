@@ -175,7 +175,7 @@ namespace FLib
                 m[k.index] = new Vec2m((0.5 + k.x) * config.rx, (0.5 + k.y) * config.ry);
                 S[k.index] = new Mat2x2m(config.rx / 3, 0, 0, config.ry / 3);
                 v[k.index] = new Vec3m(0.5, 0.5, 0.5);
-                s[k.index] = 1e-2;
+                s[k.index] = 1e-4;
             });
         }
 
