@@ -36,7 +36,7 @@ namespace FLib.ContenteBaseDownscaleUtils.Tests
 
             var kernel = new Kernel(config, 1, 1);
             int counter = 0;
-            For.AllPixeelsOfRegion(config, kernel, (c, p) => { counter++; });
+            For.AllPixelsOfRegion(config, kernel, (c, p) => { counter++; });
             Assert.AreEqual(counter, 49);
         }
 
@@ -46,7 +46,7 @@ namespace FLib.ContenteBaseDownscaleUtils.Tests
             var config = new Config(6, 6, 2, 2);
             var kernel = new Kernel(config, 1, 0);
             int counter = 0;
-            For.AllPixeelsOfRegion(config, kernel, (c, p) => { counter++; });
+            For.AllPixelsOfRegion(config, kernel, (c, p) => { counter++; });
             Assert.AreEqual(counter, 121);
         }
 

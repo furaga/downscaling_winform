@@ -24,15 +24,15 @@ namespace FLib
         Vec2m[] m;
         Mat2x2m[] S;
         Vec3m[] v;
-        decimal[] s;
+        double[] s;
         Vec3m[] c; // CIELAB, [0, 1]
-        List<decimal[]> w_;
-        List<decimal[]> g_;
-        decimal[] w(Kernel k)
+        List<double[]> w_;
+        List<double[]> g_;
+        double[] w(Kernel k)
         {
             return w_[k.index];
         }
-        decimal[] g(Kernel k)
+        double[] g(Kernel k)
         {
             return g_[k.index];
         }
@@ -40,29 +40,89 @@ namespace FLib
 
         //--------------------------------------------------------------------------
 
+        public void RunIteration(Config config)
+        {
+            eStep(config);
+            printElapsedTime(" - EStep() ");
+            mStep(config);
+            printElapsedTime(" - MStep() ");
+            cStep(config);
+            printElapsedTime(" - CStep() ");
+        }
+
+
+        // return image whose size is [config.wo, config.ho].
+        public unsafe Bitmap CreateOutputImage(Config config)
+        {
+            var bmp = new Bitmap(config.wo, config.ho, PixelFormat.Format32bppArgb);
+            using (var it = new FLib.BitmapIterator(bmp, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb))
+            {
+                byte* data = it.Data;
+
+                For.AllKernels(config, (_, k) =>
+                {
+                    Vec3m sumColor = new Vec3m(0, 0, 0);
+                    double sumWeight = 0;
+                    int count = 0;
+                    For.AllPixelsOfRegion(config, k, (_0, i) =>
+                    {
+                        double weight = w(k)[index(config, i, k)];
+                        int x = (int)(i.p.x + m[k.index].x - k.xi - (int)(1.5 * config.rx));
+                        int y = (int)(i.p.y + m[k.index].y - k.yi - (int)(1.5 * config.rx));
+                        if (x < 0 || config.wi <= x || y < 0 || config.hi <= y)
+                        {
+                            return;
+                        }
+                        int idx = x + y * config.wi;
+                        sumColor += weight * c[idx];
+                        sumWeight += weight;
+                        count++;
+                    });
+
+                    Vec3m aveColor = sumColor / sumWeight;
+                    System.Diagnostics.Debug.Assert(0 <= aveColor.x && aveColor.x <= 1);
+                    System.Diagnostics.Debug.Assert(0 <= aveColor.y && aveColor.y <= 1);
+                    System.Diagnostics.Debug.Assert(0 <= aveColor.z && aveColor.z <= 1);
+                    byte r = (byte)(255 * aveColor.x);
+                    byte g = (byte)(255 * aveColor.y);
+                    byte b = (byte)(255 * aveColor.z);
+                    data[4 * k.x + k.y * it.Stride + 0] = b;
+                    data[4 * k.x + k.y * it.Stride + 1] = g;
+                    data[4 * k.x + k.y * it.Stride + 2] = r;
+                    data[4 * k.x + k.y * it.Stride + 3] = 255;
+                });
+            }
+            return bmp;
+        }
+
         int iteration = 0;
         public Bitmap Downscale(Bitmap input, Size newSize)
         {
+            if (!System.IO.Directory.Exists("../output"))
+            {
+                System.IO.Directory.CreateDirectory("../output");
+            }
+            System.Diagnostics.Process.Start(System.IO.Path.GetFullPath("../output"));
+
             iteration = 0;
             Bitmap output = new Bitmap(newSize.Width, newSize.Height, input.PixelFormat);
             Config config = new Config(input.Width, input.Height, newSize.Width, newSize.Height);
             initialize(config, input);
             printElapsedTime(" - initialize()");
-            while (true)
+
+            for (int i = 0; i < 3; i++)
             {
                 iteration++;
 
                 try
                 {
-                    eStep(config);
-                    printElapsedTime(" - EStep() ");
-                    mStep(config);
-                    printElapsedTime(" - MStep() ");
-                    cStep(config);
-                    printElapsedTime(" - CStep() ");
-
+                    RunIteration(config);
                     if (iteration % 1 == 0)
                     {
+                        using (var bmp = CreateOutputImage(config))
+                        {
+                            bmp.Save("../output/downscaled-" + iteration + ".png");
+                        }
                         printElapsedTime(" - saveKernel() ");
                     }
                 }
@@ -70,9 +130,8 @@ namespace FLib
                 {
                     Console.WriteLine(ex);
                 }
-
-                break;
             }
+
             return output;
         }
 
@@ -94,46 +153,60 @@ namespace FLib
                         byte b = data[idx + 0];
                         byte g = data[idx + 1];
                         byte r = data[idx + 2];
-                        c[x + y * input.Width] = new Vec3m(b / 255m, g / 255m, r / 255m);
+                        c[x + y * input.Width] = new Vec3m(b / 255, g / 255, r / 255);
                     }
                 }
             }
 
             // init
-            w_ = new List<decimal[]>();
-            g_ = new List<decimal[]>();
+            w_ = new List<double[]>();
+            g_ = new List<double[]>();
             m = new Vec2m[config.wo * config.ho];
             S = new Mat2x2m[config.wo * config.ho];
             v = new Vec3m[config.wo * config.ho];
-            s = new decimal[config.wo * config.ho];
+            s = new double[config.wo * config.ho];
             For.AllKernels(config, (_, k) =>
             {
-                w_.Add(new decimal[Rsize]);
-                g_.Add(new decimal[Rsize]);
-                m[k.index] = new Vec2m(k.x, k.y);
-                S[k.index] = new Mat2x2m(config.rx / 3m, 0, 0, config.ry / 3m);
-                v[k.index] = new Vec3m(0.5m, 0.5m, 0.5m);
-                s[k.index] = 1e-4m;
+                w_.Add(new double[Rsize]);
+                g_.Add(new double[Rsize]);
+                m[k.index] = new Vec2m((0.5 + k.x) * config.rx, (0.5 + k.y) * config.ry);
+                S[k.index] = new Mat2x2m(config.rx / 3, 0, 0, config.ry / 3);
+                v[k.index] = new Vec3m(0.5, 0.5, 0.5);
+                s[k.index] = 1e-1;
             });
+        }
+
+        int index(Config config, Position i, Kernel k)
+        {
+            int rx = (int)(4 * config.rx + 1);
+            int ry = (int)(4 * config.ry + 1);
+            int ox = (int)(-1.5 * config.rx);
+            int oy = (int)(-1.5 * config.ry);
+            int x = (int)i.p.x - k.xi - ox;
+            int y = (int)i.p.y - k.yi - oy;
+            return x + y * (int)(4 * config.rx + 1);
         }
 
         void eStep(Config config)
         {
-            decimal[] sum_w = new decimal[config.wi * config.hi];
+            double[] sum_w = new double[config.wi * config.hi];
 
             For.AllKernels(config, (_, k) =>
             {
-                decimal wsum = 0m;
-                For.AllPixeelsOfRegion(config, k, (_1, i) =>
+                double sum = 0;
+                For.AllPixelsOfRegion(config, k, (_1, i) =>
                 {
-                    w(k)[i.index - k.indexi] = calcGaussian(k, i);
-                    wsum += w(k)[i.index - k.indexi];
+                    int idx = index(config, i, k);
+                    System.Diagnostics.Debug.Assert(idx >= 0);
+                    System.Diagnostics.Debug.Assert(idx < w(k).Length);
+                    w(k)[index(config, i, k)] = calcGaussian(k, i);
+                    sum += w(k)[index(config, i, k)];
                 });
 
-                For.AllPixeelsOfRegion(config, k, (_1, i) =>
+                For.AllPixelsOfRegion(config, k, (_1, i) =>
                 {
-                    w(k)[i.index - k.indexi] /= wsum;
-                    sum_w[i.index - k.indexi] += w(k)[i.index - k.indexi];
+                    w(k)[index(config, i, k)] /= (sum + 1e-8);
+                    sum_w[i.index] += w(k)[index(config, i, k)];
                 });
             });
 
@@ -141,7 +214,7 @@ namespace FLib
             {
                 For.AllKernelOfPixel(config, i, (_1, k) =>
                 {
-                    g(k)[i.index - k.indexi] = w(k)[i.index - k.indexi] / sum_w[i.index - k.indexi];
+                    g(k)[index(config, i, k)] = w(k)[index(config, i, k)] / (sum_w[i.index] + 1e-8);
                 });
             });
         }
@@ -150,33 +223,55 @@ namespace FLib
         {
             For.AllKernels(config, (_, k) =>
             {
-                var gsum = sumInRegion(config, k, i => g(k)[i.index - k.indexi]);
-                S[k.index] = sumInRegion(config, k, i => g(k)[i.index - k.indexi] * Mat2x2m.FromVecVec(i.p - m[i.index], i.p - m[i.index]));
-                m[k.index] = sumInRegion(config, k, i => g(k)[i.index - k.indexi] * i.p);
-                v[k.index] = sumInRegion(config, k, i => g(k)[i.index - k.indexi] * c[i.index]);
+                int n = 0;
+                var gsum = sumInRegion(config, k, i => {
+  //                  Console.WriteLine("[" + (n++) + "]" + g(k)[index(config, i, k)]);
+                    return g(k)[index(config, i, k)];
+                });
+                S[k.index] = sumInRegion(config, k, i => g(k)[index(config, i, k)] * Mat2x2m.FromVecVec(i.p - m[k.index], i.p - m[k.index])) / gsum;
+
+                n = 0;
+                m[k.index] = sumInRegion(config, k, i => {
+//                    Console.WriteLine("[" + (n++) + "]" + g(k)[index(config, i, k)] + " * " + i.p + " = " + g(k)[index(config, i, k)] * i.p);
+                    return g(k)[index(config, i, k)] * i.p;
+                }) / gsum;
+                v[k.index] = sumInRegion(config, k, i => g(k)[index(config, i, k)] * c[i.index]) / gsum;
             });
         }
 
         void cStep(Config config)
         {
             // TODO:
+            For.AllKernels(config, (_, k) =>
+            {
+                s[k.index] *= 1.1;
+            });
         }
 
-        decimal calcGaussian(Kernel k, Position i)
+        double calcGaussian(Kernel k, Position i)
         {
             var dpos = i.p - m[k.index];
             var invS = S[k.index].Inverse();
-            var posTerm = -0.5m * dpos * invS * dpos;
+            var posTerm = -0.5 * dpos * invS * dpos;
             var dcol = c[i.index] - v[k.index];
             var colTerm = -Vec3m.DistanceSqr(c[i.index], v[k.index]) / (2 * s[k.index] * s[k.index]);
-            var result = (decimal)Math.Exp((double)(posTerm + colTerm));
-            return result;
+            try
+            {
+                double val = Math.Max(-1e2, Math.Min(1e2, posTerm + colTerm));
+                var result = Math.Exp(val);
+                System.Diagnostics.Debug.Assert(double.IsNaN(result) == false);
+                return result;
+            }
+            catch (Exception ex)
+            {
+                return 0;
+            }
         }
 
-        decimal sumInRegion(Config config, Kernel k, Func<Position, decimal> pos2val)
+        double sumInRegion(Config config, Kernel k, Func<Position, double> pos2val)
         {
-            decimal result = 0m;
-            For.AllPixeelsOfRegion(config, k, (_, i) =>
+            double result = 0;
+            For.AllPixelsOfRegion(config, k, (_, i) =>
             {
                 result += pos2val(i);
             });
@@ -186,7 +281,7 @@ namespace FLib
         Mat2x2m sumInRegion(Config config, Kernel k, Func<Position, Mat2x2m> pos2val)
         {
             var result = new Mat2x2m(0, 0, 0, 0);
-            For.AllPixeelsOfRegion(config, k, (_, i) =>
+            For.AllPixelsOfRegion(config, k, (_, i) =>
             {
                 result += pos2val(i);
             });
@@ -196,7 +291,7 @@ namespace FLib
         Vec2m sumInRegion(Config config, Kernel k, Func<Position, Vec2m> pos2val)
         {
             var result = new Vec2m(0, 0);
-            For.AllPixeelsOfRegion(config, k, (_, i) =>
+            For.AllPixelsOfRegion(config, k, (_, i) =>
             {
                 result += pos2val(i);
             });
@@ -207,7 +302,7 @@ namespace FLib
         Vec3m sumInRegion(Config config, Kernel k, Func<Position, Vec3m> pos2val)
         {
             var result = new Vec3m(0, 0, 0);
-            For.AllPixeelsOfRegion(config, k, (_, i) =>
+            For.AllPixelsOfRegion(config, k, (_, i) =>
             {
                 result += pos2val(i);
             });

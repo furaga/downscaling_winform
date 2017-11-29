@@ -9,15 +9,15 @@ namespace FLib.ContenteBaseDownscaleUtils
     public class Config
     {
         public int wi, hi, wo, ho;
-        public decimal rx, ry;
+        public double rx, ry;
         public Config(int wi, int hi, int wo, int ho)
         {
             this.wi = wi;
             this.hi = hi;
             this.wo = wo;
             this.ho = ho;
-            this.rx = (decimal)wi / wo;
-            this.ry = (decimal)hi / ho;
+            this.rx = (double)wi / wo;
+            this.ry = (double)hi / ho;
         }
     }
 
@@ -106,11 +106,11 @@ namespace FLib.ContenteBaseDownscaleUtils
             return counter;
         }
 
-        static public int AllPixeelsOfRegion(Config config, Kernel k, Action<Config, Position> fnc)
+        static public int AllPixelsOfRegion(Config config, Kernel k, Action<Config, Position> fnc)
         {
             int counter = 0;
-            int baseX = (int)((k.x + 0.5m) * config.rx);
-            int baseY = (int)((k.y + 0.5m) * config.ry);
+            int baseX = (int)((k.x + 0.5) * config.rx);
+            int baseY = (int)((k.y + 0.5) * config.ry);
             Position i = new Position();
             for (int dy = (int)(-2 * config.ry + 1); dy <= (int)(2 * config.ry - 1); dy++)
             {
@@ -140,8 +140,8 @@ namespace FLib.ContenteBaseDownscaleUtils
             var xo = (int)(i.p.x / config.rx);
             var yo = (int)(i.p.y / config.ry);
 
-            var rx2 = 2m * config.rx;
-            var ry2 = 2m * config.ry;
+            var rx2 = 2 * config.rx;
+            var ry2 = 2 * config.ry;
 
             Kernel k = new Kernel();
             for (int ky = yo - 2; ky <= yo + 2; ky++)
@@ -156,8 +156,8 @@ namespace FLib.ContenteBaseDownscaleUtils
                     {
                         continue;
                     }
-                    var x = (kx + 0.5m) * config.rx;
-                    var y = (ky + 0.5m) * config.ry;
+                    var x = (kx + 0.5) * config.rx;
+                    var y = (ky + 0.5) * config.ry;
                     var dx = i.p.x - x;
                     var dy = i.p.y - y;
                     if (-rx2 < dx && dx < rx2 && -ry2 < dy && dy < ry2)
