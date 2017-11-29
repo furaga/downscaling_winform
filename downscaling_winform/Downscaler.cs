@@ -61,6 +61,8 @@ namespace FLib
 
                 For.AllKernels(config, (_, k) =>
                 {
+                    List<Vec3m> debug = new List<Vec3m>();
+
                     Vec3m sumColor = new Vec3m(0, 0, 0);
                     double sumWeight = 0;
                     int count = 0;
@@ -77,6 +79,7 @@ namespace FLib
                         sumColor += weight * c[idx];
                         sumWeight += weight;
                         count++;
+                        debug.Add(weight * c[idx]);
                     });
 
                     Vec3m aveColor = sumColor / sumWeight;
@@ -110,7 +113,7 @@ namespace FLib
             initialize(config, input);
             printElapsedTime(" - initialize()");
 
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < 30; i++)
             {
                 iteration++;
 
@@ -153,7 +156,7 @@ namespace FLib
                         byte b = data[idx + 0];
                         byte g = data[idx + 1];
                         byte r = data[idx + 2];
-                        c[x + y * input.Width] = new Vec3m(b / 255, g / 255, r / 255);
+                        c[x + y * input.Width] = new Vec3m(r / 255.0, g / 255.0, b / 255.0);
                     }
                 }
             }
@@ -172,7 +175,7 @@ namespace FLib
                 m[k.index] = new Vec2m((0.5 + k.x) * config.rx, (0.5 + k.y) * config.ry);
                 S[k.index] = new Mat2x2m(config.rx / 3, 0, 0, config.ry / 3);
                 v[k.index] = new Vec3m(0.5, 0.5, 0.5);
-                s[k.index] = 1e-1;
+                s[k.index] = 1e-2;
             });
         }
 
