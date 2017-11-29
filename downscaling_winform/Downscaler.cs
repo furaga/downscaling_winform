@@ -136,7 +136,7 @@ namespace FLib
                 }
             }
 
-            return output;
+            return CreateOutputImage(config);
         }
 
         unsafe void initialize(Config config, Bitmap input)

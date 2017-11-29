@@ -171,7 +171,7 @@
             this.scaleTBox.Name = "scaleTBox";
             this.scaleTBox.Size = new System.Drawing.Size(97, 24);
             this.scaleTBox.TabIndex = 8;
-            this.scaleTBox.Text = "5";
+            this.scaleTBox.Text = "10";
             // 
             // label1
             // 
@@ -294,7 +294,7 @@
             // 
             this.splitContainer2.Panel2.Controls.Add(this.richTextBox1);
             this.splitContainer2.Size = new System.Drawing.Size(755, 541);
-            this.splitContainer2.SplitterDistance = 366;
+            this.splitContainer2.SplitterDistance = 361;
             this.splitContainer2.SplitterWidth = 9;
             this.splitContainer2.TabIndex = 0;
             // 
@@ -305,7 +305,7 @@
             this.canvas.Location = new System.Drawing.Point(0, 0);
             this.canvas.Margin = new System.Windows.Forms.Padding(6, 7, 6, 7);
             this.canvas.Name = "canvas";
-            this.canvas.Size = new System.Drawing.Size(755, 366);
+            this.canvas.Size = new System.Drawing.Size(755, 361);
             this.canvas.TabIndex = 0;
             this.canvas.TabStop = false;
             this.canvas.Paint += new System.Windows.Forms.PaintEventHandler(this.canvas_Paint);
@@ -317,7 +317,7 @@
             this.richTextBox1.Location = new System.Drawing.Point(0, 0);
             this.richTextBox1.Margin = new System.Windows.Forms.Padding(6, 7, 6, 7);
             this.richTextBox1.Name = "richTextBox1";
-            this.richTextBox1.Size = new System.Drawing.Size(755, 166);
+            this.richTextBox1.Size = new System.Drawing.Size(755, 171);
             this.richTextBox1.TabIndex = 0;
             this.richTextBox1.Text = "";
             // 
