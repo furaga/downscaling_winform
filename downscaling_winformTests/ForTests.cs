@@ -37,7 +37,7 @@ namespace FLib.ContenteBaseDownscaleUtils.Tests
             var kernel = new Kernel(config, 1, 1);
             int counter = 0;
             For.AllPixelsOfRegion(config, kernel, (c, p) => { counter++; });
-            Assert.AreEqual(counter, 49);
+            Assert.AreEqual(counter, 36);
         }
 
         [TestMethod()]
@@ -47,7 +47,7 @@ namespace FLib.ContenteBaseDownscaleUtils.Tests
             var kernel = new Kernel(config, 1, 0);
             int counter = 0;
             For.AllPixelsOfRegion(config, kernel, (c, p) => { counter++; });
-            Assert.AreEqual(counter, 121);
+            Assert.AreEqual(counter, 36);
         }
 
         [TestMethod()]
@@ -57,15 +57,15 @@ namespace FLib.ContenteBaseDownscaleUtils.Tests
             var position = new Position(config, 2, 3);
             var answer = new[]
             {
-                new [] { -1, 0 },
+            //    new [] { -1, 0 },
                 new [] { 0, 0 },
                 new [] { 1, 0 },
                 new [] { 2, 0 },
-                new [] { -1, 1 },
+              //  new [] { -1, 1 },
                 new [] { 0, 1 },
                 new [] { 1, 1 },
                 new [] { 2, 1 },
-                new [] { -1, 2 },
+                //new [] { -1, 2 },
                 new [] { 0, 2 },
                 new [] { 1, 2 },
                 new [] { 2, 2 },

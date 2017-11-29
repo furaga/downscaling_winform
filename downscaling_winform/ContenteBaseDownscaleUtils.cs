@@ -19,6 +19,13 @@ namespace FLib.ContenteBaseDownscaleUtils
             this.rx = (double)wi / wo;
             this.ry = (double)hi / ho;
         }
+        public int KernelSize
+        {
+            get
+            {
+                return wo * ho;
+            }
+        }
     }
 
     public class Position
@@ -69,6 +76,38 @@ namespace FLib.ContenteBaseDownscaleUtils
             this.xi = (int)((xo) * config.rx);
             this.yi = (int)((yo) * config.ry);
             this.indexi = xi + yi * config.wi;
+        }
+
+        public List<Kernel> Neighbors4(Config config)
+        {
+            List<Kernel> neighbors = new List<Kernel>();
+            addIfValid(config, x, y - 1, neighbors);
+            addIfValid(config, x - 1, y, neighbors);
+            addIfValid(config, x + 1, y, neighbors);
+            addIfValid(config, x, y + 1, neighbors);
+            return neighbors;
+        }
+
+        public List<Kernel> Neighbors8(Config config)
+        {
+            List<Kernel> neighbors = new List<Kernel>();
+            addIfValid(config, x - 1, y - 1, neighbors);
+            addIfValid(config, x, y - 1, neighbors);
+            addIfValid(config, x + 1, y - 1, neighbors);
+            addIfValid(config, x - 1, y, neighbors);
+            addIfValid(config, x + 1, y, neighbors);
+            addIfValid(config, x - 1, y + 1, neighbors);
+            addIfValid(config, x, y + 1, neighbors);
+            addIfValid(config, x + 1, y + 1, neighbors);
+            return neighbors;
+        }
+
+        void addIfValid(Config config, int kx, int ky, List<Kernel> ls)
+        {
+            if (0 <= kx && kx < config.wo && 0 <= ky && ky < config.ho)
+            {
+                ls.Add(new Kernel(config, kx, ky));
+            }
         }
     }
 

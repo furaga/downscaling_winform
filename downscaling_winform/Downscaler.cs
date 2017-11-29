@@ -122,11 +122,12 @@ namespace FLib
                     RunIteration(config);
                     if (iteration % 1 == 0)
                     {
+                        string path = "../output/downscaled-" + iteration + ".png";
                         using (var bmp = CreateOutputImage(config))
                         {
-                            bmp.Save("../output/downscaled-" + iteration + ".png");
+                            bmp.Save(path);
                         }
-                        printElapsedTime(" - saveKernel() ");
+                        printElapsedTime(" - saveKernel(): " + path + ", ");
                     }
                 }
                 catch (Exception ex)
@@ -183,11 +184,17 @@ namespace FLib
         {
             int rx = (int)(4 * config.rx + 1);
             int ry = (int)(4 * config.ry + 1);
-            int ox = (int)(-1.5 * config.rx);
-            int oy = (int)(-1.5 * config.ry);
+            int ox = -(int)(1.5 * config.rx);
+            int oy = -(int)(1.5 * config.ry);
             int x = (int)i.p.x - k.xi - ox;
             int y = (int)i.p.y - k.yi - oy;
-            return x + y * (int)(4 * config.rx + 1);
+            int w = (int)(4 * config.rx + 1);
+            int h = (int)(4 * config.ry + 1);
+            if (0 <= x && x < w && 0 <= y && y < h)
+            {
+                return x + y * (int)(4 * config.rx + 1);
+            }
+            return -1;
         }
 
         void eStep(Config config)
@@ -208,7 +215,7 @@ namespace FLib
 
                 For.AllPixelsOfRegion(config, k, (_1, i) =>
                 {
-                    w(k)[index(config, i, k)] /= (sum + 1e-8);
+                    w(k)[index(config, i, k)] = div(w(k)[index(config, i, k)], sum);
                     sum_w[i.index] += w(k)[index(config, i, k)];
                 });
             });
@@ -217,7 +224,7 @@ namespace FLib
             {
                 For.AllKernelOfPixel(config, i, (_1, k) =>
                 {
-                    g(k)[index(config, i, k)] = w(k)[index(config, i, k)] / (sum_w[i.index] + 1e-8);
+                    g(k)[index(config, i, k)] = div(w(k)[index(config, i, k)], sum_w[i.index]);
                 });
             });
         }
@@ -226,29 +233,125 @@ namespace FLib
         {
             For.AllKernels(config, (_, k) =>
             {
-                int n = 0;
-                var gsum = sumInRegion(config, k, i => {
-  //                  Console.WriteLine("[" + (n++) + "]" + g(k)[index(config, i, k)]);
-                    return g(k)[index(config, i, k)];
-                });
+                var gsum = sumInRegion(config, k, i => g(k)[index(config, i, k)]);
                 S[k.index] = sumInRegion(config, k, i => g(k)[index(config, i, k)] * Mat2x2m.FromVecVec(i.p - m[k.index], i.p - m[k.index])) / gsum;
-
-                n = 0;
-                m[k.index] = sumInRegion(config, k, i => {
-//                    Console.WriteLine("[" + (n++) + "]" + g(k)[index(config, i, k)] + " * " + i.p + " = " + g(k)[index(config, i, k)] * i.p);
-                    return g(k)[index(config, i, k)] * i.p;
-                }) / gsum;
+                m[k.index] = sumInRegion(config, k, i => g(k)[index(config, i, k)] * i.p) / gsum;
                 v[k.index] = sumInRegion(config, k, i => g(k)[index(config, i, k)] * c[i.index]) / gsum;
             });
         }
 
         void cStep(Config config)
         {
-            // TODO:
+            // Spatial constraints
+            var aveM = new Vec2m[config.KernelSize];
             For.AllKernels(config, (_, k) =>
             {
-                s[k.index] *= 1.1;
+                aveM[k.index] = new Vec2m(0, 0);
+                var neighbors = k.Neighbors4(config);
+                foreach (var n in neighbors)
+                {
+                    aveM[k.index] += m[n.index];
+                }
+                aveM[k.index] /= neighbors.Count;
             });
+            For.AllKernels(config, (_, k) =>
+            {
+                m[k.index] = 0.5 * (aveM[k.index] + m[k.index]);
+                double halfWidth = 0.25 * config.rx;
+                double halfHeight = 0.25 * config.ry;
+                m[k.index] = clampBox(m[k.index], k.xi - halfWidth, k.yi - halfHeight, 2 * halfWidth, 2 * halfHeight);
+            });
+
+            // Constrain spatial variance
+
+            For.AllKernels(config, (_, k) =>
+            {
+                Mat2x2m _U, _S, _Vt;
+                S[k.index].SVD(out _U, out _S, out _Vt);
+                _S.m11 = clamp(_S.m11, 0.05, 0.1);
+                _S.m22 = clamp(_S.m22, 0.05, 0.1);
+                var newS = _U * _S * _Vt;
+                if (double.IsNaN(newS.Inverse().m11) == false)
+                {
+                    S[k.index] = newS;
+                }
+            });
+
+
+            // Shape constraints
+            For.AllKernels(config, (_, k) =>
+            {
+                var neighbors = k.Neighbors8(config);
+                foreach (var n in neighbors)
+                {
+                    var d = new Vec2m(n.xi - k.xi, n.yi - k.yi);
+                    var sv = sumInRegion(config, k, (i) =>
+                    {
+                        double gki = g(k)[index(config, i, k)];
+                        double dot = (i.p - m[k.index]) * d;
+                        return gki * Math.Max(0, dot);
+                    });
+                    var f = sumInRegion(config, k, (i) =>
+                    {
+                        try
+                        {
+                            double gki = g(k)[index(config, i, k)];
+                            double gni = index(config, i, n) >= 0 ? g(k)[index(config, i, n)] : 0;
+                            return gki * gni;
+                        }catch (Exception e)
+                        {
+                            return 0;
+                        }
+                    });
+                    var o = sumInRegion(config, k, (i) =>
+                    {
+                        if (i.p.x >= config.wi)
+                        {
+                            return new Vec2m(0, 0);
+                        }
+                        if (i.p.y >= config.hi)
+                        {
+                            return new Vec2m(0, 0);
+                        }
+                        double gki = g(k)[index(config, i, k)];
+                        double gni = index(config, i, n) >= 0 ? g(k)[index(config, i, n)] : 0;
+                        var p10 = new Position(config, (int)i.p.x + 1, (int)i.p.y);
+                        var p01 = new Position(config, (int)i.p.x, (int)i.p.y + 1);
+                        double gki10 = g(k)[index(config, p10, k)];
+                        double gki01 = g(k)[index(config, p01, k)];
+                        double val00 = gki / (gki + gni);
+                        double val10 = gki10 / (gki10 + gni);
+                        double val01 = gki01 / (gki01 + gni);
+                        return new Vec2m(val10 - val00, val01 - val00);
+                    });
+
+                    double cos25 = Math.Cos(Math.PI * 25 / 180.0);
+                    if (sv > 0.2 * config.rx || (f < 0.08 && d.NormalSafe() * o.NormalSafe() < cos25))
+                    {
+                        s[k.index] *= 1.1;
+                        s[n.index] *= 1.1;
+                    }
+                }
+            });
+        }
+
+        Vec2m clampBox(Vec2m p, double left, double top, double width, double height)
+        {
+            return new Vec2m(clamp(p.x, left, left + width), clamp(p.y, top, top + height));
+        }
+
+        double clamp(double val, double min, double max)
+        {
+            return Math.Max(min, Math.Min(max, val));
+        }
+
+        double div(double a, double b)
+        {
+            if (Math.Abs(b) > 0)
+            {
+                return a / b;
+            }
+            return a;
         }
 
         double calcGaussian(Kernel k, Position i)
