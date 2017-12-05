@@ -32,6 +32,7 @@
             this.fileFToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.openImageOToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.splitContainer1 = new System.Windows.Forms.SplitContainer();
+            this.contentAdaptiveRButton = new System.Windows.Forms.RadioButton();
             this.progressBar = new System.Windows.Forms.ProgressBar();
             this.label2 = new System.Windows.Forms.Label();
             this.downscaleButton = new System.Windows.Forms.Button();
@@ -49,7 +50,6 @@
             this.richTextBox1 = new System.Windows.Forms.RichTextBox();
             this.openFileDialog = new System.Windows.Forms.OpenFileDialog();
             this.backgroundWorker1 = new System.ComponentModel.BackgroundWorker();
-            this.contentAdaptiveRButton = new System.Windows.Forms.RadioButton();
             this.menuStrip1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.splitContainer1)).BeginInit();
             this.splitContainer1.Panel1.SuspendLayout();
@@ -121,6 +121,20 @@
             this.splitContainer1.SplitterDistance = 177;
             this.splitContainer1.SplitterWidth = 8;
             this.splitContainer1.TabIndex = 1;
+            // 
+            // contentAdaptiveRButton
+            // 
+            this.contentAdaptiveRButton.AutoSize = true;
+            this.contentAdaptiveRButton.Font = new System.Drawing.Font("メイリオ", 9.75F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
+            this.contentAdaptiveRButton.Location = new System.Drawing.Point(14, 199);
+            this.contentAdaptiveRButton.Margin = new System.Windows.Forms.Padding(6, 7, 6, 7);
+            this.contentAdaptiveRButton.Name = "contentAdaptiveRButton";
+            this.contentAdaptiveRButton.Size = new System.Drawing.Size(146, 24);
+            this.contentAdaptiveRButton.TabIndex = 11;
+            this.contentAdaptiveRButton.TabStop = true;
+            this.contentAdaptiveRButton.Text = "content-adaptive";
+            this.contentAdaptiveRButton.UseVisualStyleBackColor = true;
+            this.contentAdaptiveRButton.CheckedChanged += new System.EventHandler(this.radioButton_CheckedChanged);
             // 
             // progressBar
             // 
@@ -280,7 +294,7 @@
             // 
             this.splitContainer2.Panel2.Controls.Add(this.richTextBox1);
             this.splitContainer2.Size = new System.Drawing.Size(755, 541);
-            this.splitContainer2.SplitterDistance = 371;
+            this.splitContainer2.SplitterDistance = 361;
             this.splitContainer2.SplitterWidth = 9;
             this.splitContainer2.TabIndex = 0;
             // 
@@ -291,7 +305,7 @@
             this.canvas.Location = new System.Drawing.Point(0, 0);
             this.canvas.Margin = new System.Windows.Forms.Padding(6, 7, 6, 7);
             this.canvas.Name = "canvas";
-            this.canvas.Size = new System.Drawing.Size(755, 371);
+            this.canvas.Size = new System.Drawing.Size(755, 361);
             this.canvas.TabIndex = 0;
             this.canvas.TabStop = false;
             this.canvas.Paint += new System.Windows.Forms.PaintEventHandler(this.canvas_Paint);
@@ -303,7 +317,7 @@
             this.richTextBox1.Location = new System.Drawing.Point(0, 0);
             this.richTextBox1.Margin = new System.Windows.Forms.Padding(6, 7, 6, 7);
             this.richTextBox1.Name = "richTextBox1";
-            this.richTextBox1.Size = new System.Drawing.Size(755, 161);
+            this.richTextBox1.Size = new System.Drawing.Size(755, 171);
             this.richTextBox1.TabIndex = 0;
             this.richTextBox1.Text = "";
             // 
@@ -316,20 +330,6 @@
             this.backgroundWorker1.DoWork += new System.ComponentModel.DoWorkEventHandler(this.downscale_BGWork);
             this.backgroundWorker1.ProgressChanged += new System.ComponentModel.ProgressChangedEventHandler(this.backgroundWorker1_ProgressChanged);
             this.backgroundWorker1.RunWorkerCompleted += new System.ComponentModel.RunWorkerCompletedEventHandler(this.backgroundWorker1_RunWorkerCompleted);
-            // 
-            // contentAdaptiveRButton
-            // 
-            this.contentAdaptiveRButton.AutoSize = true;
-            this.contentAdaptiveRButton.Font = new System.Drawing.Font("メイリオ", 9.75F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(128)));
-            this.contentAdaptiveRButton.Location = new System.Drawing.Point(14, 199);
-            this.contentAdaptiveRButton.Margin = new System.Windows.Forms.Padding(6, 7, 6, 7);
-            this.contentAdaptiveRButton.Name = "contentAdaptiveRButton";
-            this.contentAdaptiveRButton.Size = new System.Drawing.Size(146, 24);
-            this.contentAdaptiveRButton.TabIndex = 11;
-            this.contentAdaptiveRButton.TabStop = true;
-            this.contentAdaptiveRButton.Text = "content-adaptive";
-            this.contentAdaptiveRButton.UseVisualStyleBackColor = true;
-            this.contentAdaptiveRButton.CheckedChanged += new System.EventHandler(this.radioButton_CheckedChanged);
             // 
             // Form1
             // 

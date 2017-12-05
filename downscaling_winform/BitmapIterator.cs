@@ -9,25 +9,23 @@ using System.Drawing.Imaging;
 
 namespace FLib
 {
-    /// <summary>
-    /// 使い方:
-    /// using (BitmapIterator it1 = new FLib.BitmapIterator(bmp, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb))
-    /// {
-    ///     byte* data = iter.PixelData;
-    ///     for (int y = ...)
-    ///     {
-    ///         for (int x = ...)
-    ///         {
-    ///             int idx = 4 * x + y * iter.Stride;
-    ///             byte b = data[idx + 0]
-    ///             byte g = data[idx + 1]
-    ///             byte r = data[idx + 2]
-    ///             byte a = data[idx + 3]
-    ///             ...
-    ///         }
-    ///     }
-    /// }
-    /// </summary>
+
+    //using (BitmapIterator iter = new FLib.BitmapIterator(input, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb))
+    //{
+    //    byte* data = (byte*)iter.PixelData;
+    //    for (int y = 0; y < input.Height; y++)
+    //    {
+    //        for (int x = 0; x < input.Width; x++)
+    //        {
+    //            int idx = 4 * x + y * iter.Stride;
+    //            byte b = data[idx + 0];
+    //            byte g = data[idx + 1];
+    //            byte r = data[idx + 2];
+    //            byte a = data[idx + 3];
+    //        }
+    //    }
+    //}
+
 
     unsafe public class BitmapIterator : IDisposable
     {
