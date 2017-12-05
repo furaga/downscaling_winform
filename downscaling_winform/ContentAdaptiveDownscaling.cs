@@ -19,13 +19,13 @@ using Kernel = FLib.ContenteBaseDownscaleUtils.Kernel;
 
 namespace FLib
 {
-    public class ContentBasedDownscale2
+    public class ContentAdaptiveDonwscaling
     {
-        Vec2m[] m;
-        Mat2x2m[] S;
-        Vec3m[] v;
+        Vec2[] m;
+        Mat2x2[] S;
+        Vec3[] v;
         double[] s;
-        Vec3m[] c; // CIELAB, [0, 1]
+        Vec3[] c; // CIELAB, [0, 1]
         List<double[]> w_;
         List<double[]> g_;
         double[] w(Kernel k)
@@ -61,9 +61,9 @@ namespace FLib
 
                 For.AllKernels(config, (_, k) =>
                 {
-                    List<Vec3m> debug = new List<Vec3m>();
+                    List<Vec3> debug = new List<Vec3>();
 
-                    Vec3m sumColor = new Vec3m(0, 0, 0);
+                    Vec3 sumColor = new Vec3(0, 0, 0);
                     double sumWeight = 0;
                     int count = 0;
                     For.AllPixelsOfRegion(config, k, (_0, i) =>
@@ -82,7 +82,7 @@ namespace FLib
                         debug.Add(weight * c[idx]);
                     });
 
-                    Vec3m aveColor = sumColor / sumWeight;
+                    Vec3 aveColor = sumColor / sumWeight;
                     System.Diagnostics.Debug.Assert(0 <= aveColor.x && aveColor.x <= 1);
                     System.Diagnostics.Debug.Assert(0 <= aveColor.y && aveColor.y <= 1);
                     System.Diagnostics.Debug.Assert(0 <= aveColor.z && aveColor.z <= 1);
@@ -144,7 +144,7 @@ namespace FLib
             int Rsize = (int)(4 * config.rx + 1) * (int)(4 * config.ry + 1);
 
             // copy color
-            c = new Vec3m[config.wi * config.hi];
+            c = new Vec3[config.wi * config.hi];
             System.Diagnostics.Debug.Assert(c.Length == input.Width * input.Height);
             using (BitmapIterator iter = new FLib.BitmapIterator(input, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb))
             {
@@ -157,7 +157,7 @@ namespace FLib
                         byte b = data[idx + 0];
                         byte g = data[idx + 1];
                         byte r = data[idx + 2];
-                        c[x + y * input.Width] = new Vec3m(r / 255.0, g / 255.0, b / 255.0);
+                        c[x + y * input.Width] = new Vec3(r / 255.0, g / 255.0, b / 255.0);
                     }
                 }
             }
@@ -165,17 +165,17 @@ namespace FLib
             // init
             w_ = new List<double[]>();
             g_ = new List<double[]>();
-            m = new Vec2m[config.wo * config.ho];
-            S = new Mat2x2m[config.wo * config.ho];
-            v = new Vec3m[config.wo * config.ho];
+            m = new Vec2[config.wo * config.ho];
+            S = new Mat2x2[config.wo * config.ho];
+            v = new Vec3[config.wo * config.ho];
             s = new double[config.wo * config.ho];
             For.AllKernels(config, (_, k) =>
             {
                 w_.Add(new double[Rsize]);
                 g_.Add(new double[Rsize]);
-                m[k.index] = new Vec2m((0.5 + k.x) * config.rx, (0.5 + k.y) * config.ry);
-                S[k.index] = new Mat2x2m(config.rx / 3, 0, 0, config.ry / 3);
-                v[k.index] = new Vec3m(0.5, 0.5, 0.5);
+                m[k.index] = new Vec2((0.5 + k.x) * config.rx, (0.5 + k.y) * config.ry);
+                S[k.index] = new Mat2x2(config.rx / 3, 0, 0, config.ry / 3);
+                v[k.index] = new Vec3(0.5, 0.5, 0.5);
                 s[k.index] = 1e-4;
             });
         }
@@ -234,7 +234,7 @@ namespace FLib
             For.AllKernels(config, (_, k) =>
             {
                 var gsum = sumInRegion(config, k, i => g(k)[index(config, i, k)]);
-                S[k.index] = sumInRegion(config, k, i => g(k)[index(config, i, k)] * Mat2x2m.FromVecVec(i.p - m[k.index], i.p - m[k.index])) / gsum;
+                S[k.index] = sumInRegion(config, k, i => g(k)[index(config, i, k)] * Mat2x2.FromVecVec(i.p - m[k.index], i.p - m[k.index])) / gsum;
                 m[k.index] = sumInRegion(config, k, i => g(k)[index(config, i, k)] * i.p) / gsum;
                 v[k.index] = sumInRegion(config, k, i => g(k)[index(config, i, k)] * c[i.index]) / gsum;
             });
@@ -243,10 +243,10 @@ namespace FLib
         void cStep(Config config)
         {
             // Spatial constraints
-            var aveM = new Vec2m[config.KernelSize];
+            var aveM = new Vec2[config.KernelSize];
             For.AllKernels(config, (_, k) =>
             {
-                aveM[k.index] = new Vec2m(0, 0);
+                aveM[k.index] = new Vec2(0, 0);
                 var neighbors = k.Neighbors4(config);
                 foreach (var n in neighbors)
                 {
@@ -266,7 +266,7 @@ namespace FLib
 
             For.AllKernels(config, (_, k) =>
             {
-                Mat2x2m _U, _S, _Vt;
+                Mat2x2 _U, _S, _Vt;
                 S[k.index].SVD(out _U, out _S, out _Vt);
                 _S.m11 = clamp(_S.m11, 0.05, 0.1);
                 _S.m22 = clamp(_S.m22, 0.05, 0.1);
@@ -284,7 +284,7 @@ namespace FLib
                 var neighbors = k.Neighbors8(config);
                 foreach (var n in neighbors)
                 {
-                    var d = new Vec2m(n.xi - k.xi, n.yi - k.yi);
+                    var d = new Vec2(n.xi - k.xi, n.yi - k.yi);
                     var sv = sumInRegion(config, k, (i) =>
                     {
                         double gki = g(k)[index(config, i, k)];
@@ -307,11 +307,11 @@ namespace FLib
                     {
                         if (i.p.x >= config.wi)
                         {
-                            return new Vec2m(0, 0);
+                            return new Vec2(0, 0);
                         }
                         if (i.p.y >= config.hi)
                         {
-                            return new Vec2m(0, 0);
+                            return new Vec2(0, 0);
                         }
                         double gki = g(k)[index(config, i, k)];
                         double gni = index(config, i, n) >= 0 ? g(k)[index(config, i, n)] : 0;
@@ -322,7 +322,7 @@ namespace FLib
                         double val00 = gki / (gki + gni);
                         double val10 = gki10 / (gki10 + gni);
                         double val01 = gki01 / (gki01 + gni);
-                        return new Vec2m(val10 - val00, val01 - val00);
+                        return new Vec2(val10 - val00, val01 - val00);
                     });
 
                     double cos25 = Math.Cos(Math.PI * 25 / 180.0);
@@ -335,9 +335,9 @@ namespace FLib
             });
         }
 
-        Vec2m clampBox(Vec2m p, double left, double top, double width, double height)
+        Vec2 clampBox(Vec2 p, double left, double top, double width, double height)
         {
-            return new Vec2m(clamp(p.x, left, left + width), clamp(p.y, top, top + height));
+            return new Vec2(clamp(p.x, left, left + width), clamp(p.y, top, top + height));
         }
 
         double clamp(double val, double min, double max)
@@ -360,7 +360,7 @@ namespace FLib
             var invS = S[k.index].Inverse();
             var posTerm = -0.5 * dpos * invS * dpos;
             var dcol = c[i.index] - v[k.index];
-            var colTerm = -Vec3m.DistanceSqr(c[i.index], v[k.index]) / (2 * s[k.index] * s[k.index]);
+            var colTerm = -Vec3.DistanceSqr(c[i.index], v[k.index]) / (2 * s[k.index] * s[k.index]);
             try
             {
                 double val = Math.Max(-1e2, Math.Min(1e2, posTerm + colTerm));
@@ -384,9 +384,9 @@ namespace FLib
             return result;
         }
 
-        Mat2x2m sumInRegion(Config config, Kernel k, Func<Position, Mat2x2m> pos2val)
+        Mat2x2 sumInRegion(Config config, Kernel k, Func<Position, Mat2x2> pos2val)
         {
-            var result = new Mat2x2m(0, 0, 0, 0);
+            var result = new Mat2x2(0, 0, 0, 0);
             For.AllPixelsOfRegion(config, k, (_, i) =>
             {
                 result += pos2val(i);
@@ -394,9 +394,9 @@ namespace FLib
             return result;
         }
 
-        Vec2m sumInRegion(Config config, Kernel k, Func<Position, Vec2m> pos2val)
+        Vec2 sumInRegion(Config config, Kernel k, Func<Position, Vec2> pos2val)
         {
-            var result = new Vec2m(0, 0);
+            var result = new Vec2(0, 0);
             For.AllPixelsOfRegion(config, k, (_, i) =>
             {
                 result += pos2val(i);
@@ -405,9 +405,9 @@ namespace FLib
         }
 
 
-        Vec3m sumInRegion(Config config, Kernel k, Func<Position, Vec3m> pos2val)
+        Vec3 sumInRegion(Config config, Kernel k, Func<Position, Vec3> pos2val)
         {
-            var result = new Vec3m(0, 0, 0);
+            var result = new Vec3(0, 0, 0);
             For.AllPixelsOfRegion(config, k, (_, i) =>
             {
                 result += pos2val(i);

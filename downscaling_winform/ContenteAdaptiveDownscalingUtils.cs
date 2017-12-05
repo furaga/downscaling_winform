@@ -30,11 +30,11 @@ namespace FLib.ContenteBaseDownscaleUtils
 
     public class Position
     {
-        public Vec2m p;
+        public Vec2 p;
         public int index;
         public void Set(Config config, int xi, int yi)
         {
-            this.p = new Vec2m(xi, yi);
+            this.p = new Vec2(xi, yi);
             this.index = xi + yi * config.wi;
         }
 

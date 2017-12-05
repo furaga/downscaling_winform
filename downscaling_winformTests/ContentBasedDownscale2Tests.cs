@@ -11,7 +11,7 @@ namespace FLib.Tests
     [TestClass()]
     public class ContentBasedDownscale2Tests
     {
-        System.Drawing.Bitmap cols2bmp(Vec3m[] cols, int w, int h)
+        System.Drawing.Bitmap cols2bmp(Vec3[] cols, int w, int h)
         {
             var bmp = new System.Drawing.Bitmap(w, h);
             for (int y = 0; y < h; y++)
@@ -29,12 +29,12 @@ namespace FLib.Tests
 
         System.Drawing.Bitmap createBitmap(int w, int h)
         {
-            var cols = new Vec3m[w * h];
+            var cols = new Vec3[w * h];
             for (int y = 0; y < h; y++)
             {
                 for (int x = 0; x < w; x++)
                 {
-                    cols[x + y * w] = new Vec3m(
+                    cols[x + y * w] = new Vec3(
                         (double)x / w,
                         (double)y / h,
                         1.0 - (double)x / w);
@@ -53,7 +53,7 @@ namespace FLib.Tests
             using (var bmp = createBitmap(w, h))
             {
                 var config = new ContenteBaseDownscaleUtils.Config(w, h, 4, 4);
-                var downscaler = new ContentBasedDownscale2();
+                var downscaler = new ContentAdaptiveDonwscaling();
                 downscaler.AsDynamic().initialize(config, bmp);
 
                 Assert.AreEqual(downscaler.AsDynamic().w_.Count, 16);
@@ -110,7 +110,7 @@ namespace FLib.Tests
             using (var bmp = createBitmap(w, h))
             {
                 var config = new ContenteBaseDownscaleUtils.Config(w, h, 2, 2);
-                var downscaler = new ContentBasedDownscale2();
+                var downscaler = new ContentAdaptiveDonwscaling();
                 downscaler.AsDynamic().initialize(config, bmp);
 
                 double val = Math.Max(-1e2, Math.Min(1e2, -0.5 * 3.0 - 1.5 * 1e8));
@@ -130,7 +130,7 @@ namespace FLib.Tests
             using (var bmp = createBitmap(w, h))
             {
                 var config = new ContenteBaseDownscaleUtils.Config(w, h, 2, 2);
-                var downscaler = new ContentBasedDownscale2();
+                var downscaler = new ContentAdaptiveDonwscaling();
                 downscaler.AsDynamic().initialize(config, bmp);
                 downscaler.AsDynamic().eStep(config);
 
@@ -164,7 +164,7 @@ namespace FLib.Tests
             using (var bmp = createBitmap(w, h))
             {
                 var config = new ContenteBaseDownscaleUtils.Config(w, h, 4, 4);
-                var downscaler = new ContentBasedDownscale2();
+                var downscaler = new ContentAdaptiveDonwscaling();
                 downscaler.AsDynamic().initialize(config, bmp);
                 downscaler.AsDynamic().eStep(config);
                 downscaler.AsDynamic().mStep(config);
@@ -179,7 +179,7 @@ namespace FLib.Tests
             using (var bmp = createBitmap(w, h))
             {
                 var config = new ContenteBaseDownscaleUtils.Config(w, h, 4, 4);
-                var downscaler = new ContentBasedDownscale2();
+                var downscaler = new ContentAdaptiveDonwscaling();
                 downscaler.AsDynamic().initialize(config, bmp);
                 downscaler.AsDynamic().eStep(config);
                 downscaler.AsDynamic().mStep(config);
