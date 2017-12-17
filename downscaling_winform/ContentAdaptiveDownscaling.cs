@@ -191,6 +191,18 @@ namespace FLib
             return -1;
         }
 
+
+        int index(Config config, int px, int py, Kernel k)
+        {
+            int x = px - k.xi - config.ox_15;
+            int y = py - k.yi - config.oy_15;
+            if (0 <= x && x < config.RW && 0 <= y && y < config.RH)
+            {
+                return x + y * config.RW;
+            }
+            return -1;
+        }
+
         void eStep(Config config)
         {
             double[] sum_w = new double[config.wi * config.hi];
@@ -303,6 +315,9 @@ namespace FLib
 
 
                     var o = new Vec2(0, 0);
+                    var gk = g(k);
+                    var p10 = new Position(config, 0, 0);
+                    var p01 = new Position(config, 0, 0);
                     For.AllPixelsOfRegion(config, k, (_2, i) =>
                     {
                         if (i.p.x >= config.wi)
@@ -313,12 +328,13 @@ namespace FLib
                         {
                             return;
                         }
-                        double gki = g(k)[index(config, i, k)];
-                        double gni = index(config, i, n) >= 0 ? g(k)[index(config, i, n)] : 0;
-                        var p10 = new Position(config, (int)i.p.x + 1, (int)i.p.y);
-                        var p01 = new Position(config, (int)i.p.x, (int)i.p.y + 1);
-                        double gki10 = g(k)[index(config, p10, k)];
-                        double gki01 = g(k)[index(config, p01, k)];
+                        double gki = gk[index(config, i, k)];
+                        int index_in = index(config, i, n);
+                        double gni = index_in >= 0 ? gk[index_in] : 0;
+                        int ipx = (int)i.p.x;
+                        int ipy = (int)i.p.y;
+                        double gki10 = gk[index(config, ipx + 1, ipy, k)];
+                        double gki01 = gk[index(config, ipx, ipy + 1, k)];
                         double val00 = gki / (gki + gni);
                         double val10 = gki10 / (gki10 + gni);
                         double val01 = gki01 / (gki01 + gni);
