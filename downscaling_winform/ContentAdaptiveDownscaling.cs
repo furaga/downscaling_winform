@@ -182,17 +182,11 @@ namespace FLib
 
         int index(Config config, Position i, Kernel k)
         {
-            int rx = (int)(4 * config.rx + 1);
-            int ry = (int)(4 * config.ry + 1);
-            int ox = -(int)(1.5 * config.rx);
-            int oy = -(int)(1.5 * config.ry);
-            int x = (int)i.p.x - k.xi - ox;
-            int y = (int)i.p.y - k.yi - oy;
-            int w = (int)(4 * config.rx + 1);
-            int h = (int)(4 * config.ry + 1);
-            if (0 <= x && x < w && 0 <= y && y < h)
+            int x = (int)i.p.x - k.xi - config.ox_15;
+            int y = (int)i.p.y - k.yi - config.oy_15;
+            if (0 <= x && x < config.RW && 0 <= y && y < config.RH)
             {
-                return x + y * (int)(4 * config.rx + 1);
+                return x + y * config.RW;
             }
             return -1;
         }
@@ -303,15 +297,21 @@ namespace FLib
                             return 0;
                         }
                     });
-                    var o = sumInRegion(config, k, (i) =>
+
+
+
+
+
+                    var o = new Vec2(0, 0);
+                    For.AllPixelsOfRegion(config, k, (_2, i) =>
                     {
                         if (i.p.x >= config.wi)
                         {
-                            return new Vec2(0, 0);
+                            return;
                         }
                         if (i.p.y >= config.hi)
                         {
-                            return new Vec2(0, 0);
+                            return;
                         }
                         double gki = g(k)[index(config, i, k)];
                         double gni = index(config, i, n) >= 0 ? g(k)[index(config, i, n)] : 0;
@@ -322,8 +322,14 @@ namespace FLib
                         double val00 = gki / (gki + gni);
                         double val10 = gki10 / (gki10 + gni);
                         double val01 = gki01 / (gki01 + gni);
-                        return new Vec2(val10 - val00, val01 - val00);
+                        o.x += val10 - val00;
+                        o.y += val01 - val00;
                     });
+
+
+
+
+
 
                     double cos25 = Math.Cos(Math.PI * 25 / 180.0);
                     if (sv > 0.2 * config.rx || (f < 0.08 && d.NormalSafe() * o.NormalSafe() < cos25))

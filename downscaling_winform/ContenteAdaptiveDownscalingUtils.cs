@@ -10,6 +10,8 @@ namespace FLib.ContenteBaseDownscaleUtils
     {
         public int wi, hi, wo, ho;
         public double rx, ry;
+        public int RW, RH;
+        public int ox_15, oy_15;
         public Config(int wi, int hi, int wo, int ho)
         {
             this.wi = wi;
@@ -18,6 +20,11 @@ namespace FLib.ContenteBaseDownscaleUtils
             this.ho = ho;
             this.rx = (double)wi / wo;
             this.ry = (double)hi / ho;
+
+            ox_15 = -(int)(1.5 * rx);
+            oy_15 = -(int)(1.5 * ry);
+            RW = (int)(4 * rx + 1);
+            RH = (int)(4 * ry + 1);
         }
         public int KernelSize
         {
